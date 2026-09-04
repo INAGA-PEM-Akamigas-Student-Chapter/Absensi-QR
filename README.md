@@ -55,7 +55,7 @@ Sekali siapkan, berlaku untuk semua perangkat.
 
 **Build → Firestore Database → Create database.** Pilih lokasi terdekat
 (`asia-southeast1` / Singapore untuk Indonesia). Mode awal bebas — aturannya kita ganti
-di langkah 5.
+di langkah 4.
 
 ### 3. Aktifkan login email
 
@@ -67,24 +67,7 @@ Akun inilah yang dipakai masuk di HP maupun laptop.
 Supaya orang lain tidak bisa mendaftar sendiri: **Authentication → Settings → User
 actions**, hilangkan centang *Enable create (sign-up)*.
 
-### 4. Daftarkan diri Anda sebagai admin
-
-Peran diambil dari koleksi `pengguna` di Firestore. **Buat dokumen pertama secara
-manual sebelum memasang aturan**, kalau tidak semua orang termasuk Anda akan terkunci.
-
-**Firestore Database → Start collection** → Collection ID: `pengguna` → Document ID:
-isi dengan **email Anda** (misalnya `nama@gmail.com`), lalu tambahkan tiga kolom:
-
-| Field | Type | Value |
-|---|---|---|
-| `email` | string | email yang sama |
-| `nama` | string | nama Anda |
-| `peran` | string | `admin` |
-
-Setelah aplikasi berjalan, akun berikutnya cukup ditambahkan lewat
-**Pengaturan → Akun pengguna** — tidak perlu kembali ke Console.
-
-### 5. Pasang aturan keamanan
+### 4. Pasang aturan keamanan
 
 **Firestore Database → Rules**, ganti seluruh isinya dengan:
 
@@ -92,59 +75,34 @@ Setelah aplikasi berjalan, akun berikutnya cukup ditambahkan lewat
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    function terdaftar() {
+    function diizinkan() {
       return request.auth != null
-          && exists(/databases/$(database)/documents/pengguna/$(request.auth.token.email));
+          && request.auth.token.email in [
+               'email-anda@contoh.com'
+             ];
     }
-    function peran() {
-      return terdaftar()
-        ? get(/databases/$(database)/documents/pengguna/$(request.auth.token.email)).data.peran
-        : '';
-    }
-
-    match /pengguna/{email} {
-      allow read:  if terdaftar();
-      allow write: if peran() == 'admin';
-    }
-    match /peserta/{kode} {
-      allow read:  if terdaftar();
-      allow write: if peran() == 'admin';
-    }
-    match /absensi/{tanggal} {
-      allow read:  if terdaftar();
-      allow write: if peran() in ['admin', 'petugas'];
-    }
-    match /pengaturan/{doc} {
-      allow read:  if terdaftar();
-      allow write: if peran() == 'admin';
+    match /{document=**} {
+      allow read, write: if diizinkan();
     }
   }
 }
 ```
 
-Klik **Publish**.
+Ganti `email-anda@contoh.com` dengan email akun dari langkah 3, lalu klik **Publish**.
+Untuk menambah petugas, tambahkan emailnya di dalam kurung siku dipisah koma:
 
-Yang dijamin aturan ini: hanya email yang ada di koleksi `pengguna` yang bisa membaca
-apa pun; hanya **admin** yang boleh mengubah peserta, aturan jam, dan daftar akun;
-**petugas** boleh mencatat kehadiran tetapi tidak mengubah data induk; **pengamat**
-hanya membaca.
+```
+               'email-anda@contoh.com',
+               'petugas-dua@contoh.com'
+```
 
-Pembatasan di dalam aplikasi hanya menyembunyikan tombol yang tidak berlaku. Aturan
-inilah yang benar-benar menahan, termasuk terhadap orang yang memanggil API langsung.
+Daftar email ini penting: `request.auth != null` saja tidak cukup, karena berarti
+siapa pun yang berhasil membuat akun boleh membaca dan mengubah seluruh absensi.
 
-## Peran akun
+Semua yang ada di daftar punya akses penuh yang sama — aplikasi ini tidak membedakan
+peran. Berikan akses hanya kepada pengurus yang memang perlu mengelola data.
 
-| Peran | Pindai | Rekap & Dasbor | Kelola peserta | Aturan jam | Kelola akun |
-|---|---|---|---|---|---|
-| **Admin** | ya | ya | ya | ya | ya |
-| **Petugas** | ya | ya | — | — | — |
-| **Pengamat** | — | ya | — | — | — |
-
-Kelola lewat **Pengaturan → Akun pengguna**. Menambahkan email di sana hanya mengatur
-perannya; akun untuk masuk tetap dibuat di **Authentication → Users**.
-
-### 6. Salin konfigurasi ke repositori
+### 5. Salin konfigurasi ke repositori
 
 **Project settings** (ikon gerigi) → **Your apps** → **Web** (`</>`) → daftarkan
 aplikasi → salin isi objek `firebaseConfig`, lalu tempelkan ke `firebase-config.js` di
@@ -154,7 +112,7 @@ Tunggu satu-dua menit sampai GitHub Pages membangun ulang, buka halamannya, lalu
 dengan akun dari langkah 3. Setelah itu HP dan laptop melihat data yang sama, dan
 perubahan di satu perangkat langsung muncul di perangkat lain.
 
-### 7. Kunci pendaftaran (WAJIB)
+### 6. Kunci pendaftaran (WAJIB)
 
 Kunci API di `firebase-config.js` bersifat publik — setiap browser pengunjung
 menerimanya, dan itu memang rancangan Firebase. Menyembunyikannya tidak mungkin dan
@@ -163,13 +121,12 @@ tidak perlu. Yang menjaga data adalah dua setelan berikut, dan keduanya harus di
 - **Authentication → Settings → User actions**, hilangkan centang
   *Enable create (sign-up)*. Tanpa ini, siapa pun bisa membuat akun di proyek Anda
   dengan memanggil API Firebase langsung, tanpa perlu menyentuh halaman ini.
-- **Rules** pada langkah 5 mensyaratkan email ada di koleksi `pengguna`, bukan sekadar
-  `request.auth != null`. Akun yang tidak terdaftar tetap ditolak walau berhasil masuk,
-  dan yang terdaftar pun dibatasi sesuai perannya.
+- **Rules** pada langkah 4 memakai daftar email, bukan sekadar `request.auth != null`.
+  Akun di luar daftar tetap ditolak walau berhasil masuk.
 
 Periksa juga **Authentication → Users** dan hapus akun yang bukan Anda buat.
 
-### 8. Firebase App Check (opsional, lapisan tambahan)
+### 7. Firebase App Check (opsional, lapisan tambahan)
 
 App Check membuat Firebase menolak permintaan yang tidak datang dari halaman ini,
 bahkan bila penyerang memegang kunci API Anda.
@@ -199,7 +156,6 @@ setelah *Enforce* menyala — aplikasi berhenti berfungsi. Itulah sebabnya tahap
 peserta/<kode>          { kode, nama, grup }
 absensi/<YYYY-MM-DD>    { tanggal, catatan: { <kode>: { nama, grup, masuk, pulang, status } } }
 pengaturan/umum         { jamMasuk, toleransi }
-pengguna/<email>        { email, nama, peran }        peran: admin | petugas | pengamat
 ```
 
 Pemindaian tetap berfungsi saat sinyal putus — Firestore menyimpan salinan luring dan
