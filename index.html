@@ -10198,6 +10198,31 @@ header.top{background:var(--surface); border-bottom:1px solid var(--line); posit
 .chip.on{border-color:var(--accent); color:var(--accent); background:var(--accent-soft)}
 .chip.on .dot{background:var(--accent)}
 
+.akun-bungkus{position:relative; display:flex; align-items:center}
+.avatar{
+  position:relative; width:36px; height:36px; flex:none; border-radius:50%;
+  border:0; padding:0; cursor:pointer; color:#fff; display:grid; place-items:center;
+  font-family:Archivo,sans-serif; font-weight:700; font-size:13.5px; letter-spacing:.02em;
+  box-shadow:0 0 0 2px var(--surface), 0 0 0 3px var(--line-strong); transition:box-shadow .15s;
+}
+.avatar:hover, .avatar[aria-expanded="true"]{box-shadow:0 0 0 2px var(--surface), 0 0 0 3px var(--accent)}
+.avatar.besar{width:44px; height:44px; font-size:16px; box-shadow:none; cursor:default}
+.titik-sinkron{
+  position:absolute; right:-1px; bottom:-1px; width:11px; height:11px; border-radius:50%;
+  background:var(--ok); border:2px solid var(--surface);
+}
+.pop-akun{
+  position:absolute; top:calc(100% + 10px); right:0; z-index:40; width:262px;
+  background:var(--surface); border:1px solid var(--line-strong); border-radius:12px;
+  box-shadow:var(--shadow); padding:14px; display:flex; flex-direction:column; gap:12px;
+}
+.pop-kepala{display:flex; align-items:center; gap:11px; min-width:0}
+.pop-teks{min-width:0}
+.pop-surel{font-size:13.5px; font-weight:600; overflow-wrap:anywhere; line-height:1.3}
+.pop-status{font-size:12px; color:var(--ok); margin-top:2px}
+.pop-akun .btn.lebar{justify-content:center}
+@media (max-width:600px){ .pop-akun{width:min(268px, calc(100vw - 28px))} }
+
 .bar-nav{position:relative; display:flex; align-items:center; border-top:1px solid var(--line);
   border-bottom:1px solid var(--line); background:var(--surface); margin:0 -6px}
 .menu-tombol{
@@ -10526,7 +10551,24 @@ td.nm{white-space:nowrap}
       </div>
     </div>
     <div id="simpanChip" class="chip"><span class="dot"></span><span id="simpanTeks">Menyiapkan…</span></div>
-    <button class="btn small" id="tombolKeluar" data-act="keluar" hidden>Keluar</button>
+    <div class="akun-bungkus" id="akunBungkus" hidden>
+      <button class="avatar" id="tombolAkun" aria-expanded="false" aria-haspopup="true"
+              aria-controls="menuAkun" aria-label="Menu akun">
+        <span id="avatarInisial" aria-hidden="true"></span>
+        <span class="titik-sinkron" aria-hidden="true"></span>
+      </button>
+      <div class="tirai" id="tiraiAkun" hidden></div>
+      <div class="pop-akun" id="menuAkun" role="menu" hidden>
+        <div class="pop-kepala">
+          <span class="avatar besar" id="avatarBesar" aria-hidden="true"></span>
+          <div class="pop-teks">
+            <div class="pop-surel" id="popSurel"></div>
+            <div class="pop-status" id="popStatus"></div>
+          </div>
+        </div>
+        <button class="btn lebar" data-act="keluar" role="menuitem">Keluar dari akun</button>
+      </div>
+    </div>
     <div class="clock">
       <div class="jam" id="jamNow">--:--:--</div>
       <div class="tgl" id="tglNow">—</div>
@@ -10764,16 +10806,46 @@ function tulisLokal(){
   }catch(e){ /* penyimpanan penuh atau diblokir: data sesi ini tetap jalan */ }
 }
 
+/* Inisial dan rona diturunkan dari alamat surel, jadi tiap akun punya warna
+   tetap yang sama di semua perangkat tanpa perlu menyimpan apa pun. */
+function inisialAkun(surel){
+  var lokal = String(surel || "").split("@")[0];
+  var huruf = lokal.replace(/[^A-Za-z]/g, "");
+  if(huruf.length >= 2) return (huruf.charAt(0) + huruf.charAt(1)).toUpperCase();
+  if(huruf.length === 1) return huruf.toUpperCase();
+  return (lokal.slice(0, 2) || "?").toUpperCase();
+}
+function ronaAkun(surel){
+  var h = 0, s = String(surel || "");
+  for(var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360;
+  return h;
+}
+function pasangAvatar(surel){
+  var bungkus = $("#akunBungkus");
+  if(!bungkus) return;
+  var ini = inisialAkun(surel), warna = "hsl(" + ronaAkun(surel) + " 38% 36%)";
+  var kecil = $("#avatarInisial"), besar = $("#avatarBesar");
+  if(kecil){ kecil.textContent = ini; kecil.parentNode.style.background = warna; }
+  if(besar){ besar.textContent = ini; besar.style.background = warna; }
+  var surelEl = $("#popSurel"); if(surelEl) surelEl.textContent = surel || "";
+  var statusEl = $("#popStatus"); if(statusEl) statusEl.textContent = "Tersinkron dengan Firebase";
+  var tombol = $("#tombolAkun");
+  if(tombol) tombol.setAttribute("aria-label", "Menu akun " + (surel || ""));
+}
+
 function chipSimpan(){
   var chip = $("#simpanChip"), teks = $("#simpanTeks");
-  var kel = $("#tombolKeluar");
-  if(kel) kel.hidden = !(state.storage === "firebase" && fbUser);
+  var bungkus = $("#akunBungkus");
+  var pakaiAvatar = (state.storage === "firebase" && fbUser && fbUser.email);
+  if(bungkus) bungkus.hidden = !pakaiAvatar;
+  if(chip) chip.hidden = !!pakaiAvatar;
+  if(pakaiAvatar){ pasangAvatar(fbUser.email); return; }
   if(state.storage === "server"){
     chip.className = "chip on";
     teks.textContent = "Tersimpan di server";
   }else if(state.storage === "firebase"){
     chip.className = "chip on";
-    teks.textContent = "Tersinkron" + (fbUser && fbUser.email ? " · " + fbUser.email : "");
+    teks.textContent = "Tersinkron";
   }else{
     chip.className = "chip";
     teks.textContent = "Tersimpan di perangkat ini";
@@ -11711,6 +11783,13 @@ function bukaMenu(buka){
     if(pertama) pertama.focus();
   }
 }
+function bukaAkun(buka){
+  var tombol = $("#tombolAkun"), pop = $("#menuAkun"), tirai = $("#tiraiAkun");
+  if(!tombol || !pop) return;
+  tombol.setAttribute("aria-expanded", String(buka));
+  pop.hidden = !buka;
+  if(tirai) tirai.hidden = !buka;
+}
 function tandaiTab(){
   var label = $("#tabAktif");
   if(label) label.textContent = JUDUL_TAB[state.tab] || "Menu";
@@ -12348,6 +12427,9 @@ document.addEventListener("click", function(ev){
     return;
   }
   if(ev.target.id === "tiraiMenu"){ bukaMenu(false); return; }
+  if(ev.target.closest("#tombolAkun")){ bukaAkun($("#menuAkun").hidden); return; }
+  if(ev.target.id === "tiraiAkun"){ bukaAkun(false); return; }
+  if(!ev.target.closest("#menuAkun")) bukaAkun(false);
   var kepala = ev.target.closest("[data-urut]");
   if(kepala){ ubahUrutan(kepala.dataset.urut); return; }
   var t = ev.target.closest("[data-act], [data-tab], [data-mode], [data-periode], [data-tema], [data-suara], [data-batas]");
@@ -12448,6 +12530,7 @@ document.addEventListener("keydown", function(ev){
   }
   if(ev.key === "Escape"){
     if($("#menuNav") && !$("#menuNav").hidden){ bukaMenu(false); $("#tombolMenu").focus(); return; }
+    if($("#menuAkun") && !$("#menuAkun").hidden){ bukaAkun(false); $("#tombolAkun").focus(); return; }
     if($("#modal")) tutupModal();
   }
 });
