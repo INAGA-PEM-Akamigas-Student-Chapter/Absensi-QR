@@ -10373,6 +10373,17 @@ img{max-width:100%}
 .btn:active{transform:translateY(1px)}
 
 /* bilah proporsi di bawah tiga angka ringkasan */
+.stats.empat{grid-template-columns:repeat(4,1fr)}
+@media (max-width:700px){ .stats.empat{grid-template-columns:repeat(2,1fr)} }
+td.persen{min-width:118px}
+td.persen .angka{font-family:"IBM Plex Mono",monospace; font-variant-numeric:tabular-nums; font-size:13.5px}
+td.persen .bar{display:block; height:5px; border-radius:3px; background:var(--sunk); margin-top:5px; overflow:hidden}
+td.persen .bar i{display:block; height:100%; border-radius:3px}
+td.persen .bar .ok{background:var(--ok)}
+td.persen .bar .warn{background:var(--warn)}
+td.persen .bar .bad{background:var(--bad)}
+#periodeSeg button{padding:5px 12px; font-size:12.5px}
+
 .stats .bilah{grid-column:1 / -1; display:flex; height:5px; background:var(--sunk)}
 .stats .bilah i{display:block; height:100%; transition:width .35s ease}
 .stats .bilah .b-hadir{background:var(--ok)}
@@ -10486,6 +10497,7 @@ td.nm{white-space:nowrap}
       <button role="tab" data-tab="scan" aria-selected="true">Pindai</button>
       <button role="tab" data-tab="peserta" aria-selected="false">Peserta</button>
       <button role="tab" data-tab="rekap" aria-selected="false">Rekap</button>
+      <button role="tab" data-tab="dasbor" aria-selected="false">Dasbor</button>
     </nav>
   </div>
 </header>
@@ -10545,6 +10557,8 @@ var state = {
   tglRekap: tglISO(),
   urutPeserta: {kolom:"kode", arah:"asc"},
   urutRekap:   {kolom:"kode", arah:"asc"},
+  urutDasbor:  {kolom:"persen", arah:"desc"},
+  periode: 30,                       // 7, 30, atau 0 untuk semua yang tercatat
   kameraPesan: "",
   contohHari: contohHari()
 };
@@ -10574,6 +10588,62 @@ function statusMasuk(hm){
   var batas = menit(state.pengaturan.jamMasuk) + (+state.pengaturan.toleransi || 0);
   return menit(hm) <= batas ? "hadir" : "terlambat";
 }
+/* Hanya hari yang benar-benar punya catatan dihitung sebagai pertemuan.
+   Hari libur atau hari tanpa kegiatan tidak boleh menurunkan persentase siapa pun. */
+function hariTercatat(){
+  var src = state.demo ? state.contohHari : state.hari;
+  var iso = Object.keys(src).filter(function(k){
+    var c = src[k] && src[k].catatan;
+    return c && Object.keys(c).length > 0;
+  }).sort();
+  if(state.periode > 0){
+    var batas = new Date();
+    batas.setDate(batas.getDate() - (state.periode - 1));
+    var b = tglISO(batas);
+    iso = iso.filter(function(k){ return k >= b; });
+  }
+  return iso;
+}
+function statistikPeserta(){
+  var hari = hariTercatat(), src = state.demo ? state.contohHari : state.hari;
+  return daftarPeserta().map(function(p){
+    var hadir = 0, telat = 0;
+    hari.forEach(function(iso){
+      var r = (src[iso].catatan || {})[p.kode];
+      if(r && r.masuk){ if(r.status === "terlambat") telat++; else hadir++; }
+    });
+    var ikut = hadir + telat;
+    return {kode:p.kode, nama:p.nama, grup:p.grup || "",
+            hadir:hadir, telat:telat, absen: hari.length - ikut,
+            persen: hari.length ? Math.round(ikut / hari.length * 100) : 0};
+  });
+}
+var ANGKA_DASBOR = {hadir:1, telat:1, absen:1, persen:1};
+function urutkanDasbor(arr){
+  var u = state.urutDasbor, k = u.kolom, arah = (u.arah === "desc") ? -1 : 1;
+  return arr.slice().sort(function(a, b){
+    var c = ANGKA_DASBOR[k] ? (a[k] - b[k]) : bandingAlami(a[k], b[k]);
+    if(c === 0) c = bandingAlami(a.kode, b.kode);
+    return c * arah;
+  });
+}
+function ringkasDasbor(){
+  var hari = hariTercatat(), st = statistikPeserta();
+  var jumlahHadir = 0, jumlahTelat = 0, penuh = 0;
+  st.forEach(function(s){
+    jumlahHadir += s.hadir; jumlahTelat += s.telat;
+    if(hari.length && s.absen === 0) penuh++;
+  });
+  var slot = hari.length * st.length;
+  return {
+    pertemuan: hari.length,
+    peserta: st.length,
+    rata: slot ? Math.round((jumlahHadir + jumlahTelat) / slot * 100) : 0,
+    telat: jumlahTelat,
+    penuh: penuh
+  };
+}
+
 function bilahRingkas(r){
   var total = Math.max(1, r.total);
   return '<div class="bilah" role="img" aria-label="' + r.hadir + ' hadir, ' + r.telat +
@@ -11439,7 +11509,8 @@ function urutkanRekap(baris){
 
 /* Kepala kolom yang bisa diklik untuk mengurutkan. */
 function th(label, kolom, kelas){
-  var u = (state.tab === "rekap") ? state.urutRekap : state.urutPeserta;
+  var u = (state.tab === "rekap") ? state.urutRekap
+        : (state.tab === "dasbor") ? state.urutDasbor : state.urutPeserta;
   var aktif = u.kolom === kolom;
   var arah = aktif ? (u.arah === "desc" ? "descending" : "ascending") : null;
   return '<th class="th-urut' + (kelas ? " " + kelas : "") + '"' +
@@ -11456,6 +11527,50 @@ function barisRekap(iso){
     return [iso, p.kode, p.nama, p.grup || "", c.masuk || "", c.pulang || "", st];
   }));
 }
+function dasborExcel(){
+  var hari = hariTercatat(), st = urutkanDasbor(statistikPeserta()), r = ringkasDasbor();
+  var src = state.demo ? state.contohHari : state.hari;
+  var total = Math.max(1, daftarPeserta().length);
+
+  var perHari = hari.map(function(iso){
+    var cat = src[iso].catatan || {}, ikut = 0, telat = 0;
+    Object.keys(cat).forEach(function(k){
+      if(cat[k].masuk){ ikut++; if(cat[k].status === "terlambat") telat++; }
+    });
+    return [iso, tglPanjang(iso), ikut, telat, total - ikut, Math.round(ikut / total * 100)];
+  });
+
+  unduh("kehadiran-" + tglISO() + ".xlsx", bukuXLSX([
+    {
+      nama: "Kehadiran",
+      lebar: [12, 26, 22, 10, 10, 10, 14],
+      baris: [["Kode","Nama","Kelas / Divisi","Hadir","Terlambat","Tidak hadir","Kehadiran (%)"]]
+        .concat(st.map(function(s){
+          return [s.kode, s.nama, s.grup, s.hadir, s.telat, s.absen, s.persen];
+        }))
+    },
+    {
+      nama: "Per Pertemuan",
+      lebar: [12, 26, 10, 12, 12, 14],
+      baris: [["Tanggal","Hari","Hadir","Terlambat","Tidak hadir","Kehadiran (%)"]].concat(perHari)
+    },
+    {
+      nama: "Ringkasan",
+      lebar: [26, 22],
+      baris: [
+        ["Keterangan","Nilai"],
+        ["Periode", state.periode ? (state.periode + " hari terakhir") : "Semua yang tercatat"],
+        ["Pertemuan tercatat", r.pertemuan],
+        ["Peserta terdaftar", r.peserta],
+        ["Rata-rata kehadiran (%)", r.rata],
+        ["Total keterlambatan", r.telat],
+        ["Peserta selalu hadir", r.penuh],
+        ["Diunduh", new Date().toLocaleString("id-ID")]
+      ]
+    }
+  ]));
+}
+
 function rekapExcel(){
   var iso = state.tglRekap, r = ringkas(iso);
   unduh("absensi-" + iso + ".xlsx", bukuXLSX([
@@ -11534,9 +11649,10 @@ function renderBanner(){
 
 function renderPanel(){
   var p = $("#panel");
-  if(state.tab === "scan")        p.innerHTML = viewScan();
-  else if(state.tab === "peserta") p.innerHTML = viewPeserta();
-  else                             p.innerHTML = viewRekap();
+  if(state.tab === "scan")         p.innerHTML = viewScan();
+  else if(state.tab === "peserta")  p.innerHTML = viewPeserta();
+  else if(state.tab === "dasbor")   p.innerHTML = viewDasbor();
+  else                              p.innerHTML = viewRekap();
 
   if(state.tab === "scan"){
     var vp = $("#viewport");
@@ -11675,6 +11791,104 @@ function viewPeserta(){
             '<th></th></tr></thead><tbody>' + rows + '</tbody></table></div>'
         : '<div class="empty">' + IKON.kosong + '<b>Belum ada peserta</b>' +
           '<span>Tambahkan lewat formulir di atas, lalu unduh dan cetak kartu QR-nya.</span></div>') +
+    '</div>' +
+  '</div>';
+}
+
+function grafikDasbor(){
+  var hari = hariTercatat().slice(-30);          // batasi agar batang tidak terlalu tipis
+  var total = Math.max(1, daftarPeserta().length);
+  var src = state.demo ? state.contohHari : state.hari;
+  if(!hari.length) return "";
+
+  var W = 700, H = 176, kiri = 30, kanan = 8, dasar = 128, tinggiMaks = 92;
+  var kolom = (W - kiri - kanan) / hari.length;
+  var lebar = Math.max(3, Math.min(38, kolom - 8));
+
+  var bagian = hari.map(function(iso, i){
+    var cat = src[iso].catatan || {}, ikut = 0;
+    Object.keys(cat).forEach(function(k){ if(cat[k].masuk) ikut++; });
+    var persen = Math.round(ikut / total * 100);
+    var tinggi = Math.round(tinggiMaks * Math.min(1, ikut / total));
+    var x = kiri + i * kolom + (kolom - lebar) / 2;
+    var y = dasar - tinggi;
+    var d = dariISO(iso);
+    var label = (hari.length <= 12)
+      ? '<text x="' + (x + lebar/2) + '" y="' + (dasar + 16) + '" text-anchor="middle" ' +
+        'font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)">' +
+        pad(d.getDate()) + '/' + pad(d.getMonth()+1) + '</text>'
+      : "";
+    var nilai = (hari.length <= 16 && tinggi > 14)
+      ? '<text x="' + (x + lebar/2) + '" y="' + (y - 6) + '" text-anchor="middle" ' +
+        'font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--ink-2)">' + persen + '</text>'
+      : "";
+    return '<rect x="' + x + '" y="' + y + '" width="' + lebar + '" height="' + Math.max(2, tinggi) +
+           '" rx="2.5" fill="var(--accent)" opacity=".85"><title>' + esc(tglPanjang(iso)) +
+           ' — ' + ikut + ' dari ' + total + ' (' + persen + '%)</title></rect>' + nilai + label;
+  }).join("");
+
+  return '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Kehadiran tiap pertemuan">' +
+    '<text x="0" y="14" font-family="Archivo, sans-serif" font-size="11" font-weight="600" ' +
+      'letter-spacing="1.1" fill="var(--muted)">KEHADIRAN TIAP PERTEMUAN</text>' +
+    '<text x="' + W + '" y="14" text-anchor="end" font-family="Source Sans 3, sans-serif" ' +
+      'font-size="11.5" fill="var(--muted)">' + hari.length + ' pertemuan terakhir</text>' +
+    '<line x1="' + kiri + '" y1="' + (dasar - tinggiMaks) + '" x2="' + (W - kanan) + '" y2="' + (dasar - tinggiMaks) +
+      '" stroke="var(--line)" stroke-dasharray="3 4"/>' +
+    '<line x1="' + kiri + '" y1="' + dasar + '" x2="' + (W - kanan) + '" y2="' + dasar +
+      '" stroke="var(--line-strong)"/>' +
+    '<text x="0" y="' + (dasar - tinggiMaks + 4) + '" font-family="IBM Plex Mono, monospace" ' +
+      'font-size="10" fill="var(--muted)">100%</text>' +
+    '<text x="0" y="' + (dasar + 4) + '" font-family="IBM Plex Mono, monospace" ' +
+      'font-size="10" fill="var(--muted)">0</text>' +
+    bagian + '</svg>';
+}
+
+function viewDasbor(){
+  var r = ringkasDasbor(), st = urutkanDasbor(statistikPeserta());
+  var pilihan = [[7,"7 hari"],[30,"30 hari"],[0,"Semua"]].map(function(o){
+    return '<button data-periode="' + o[0] + '" aria-pressed="' + (state.periode === o[0]) + '">' + o[1] + '</button>';
+  }).join("");
+
+  var rows = st.map(function(s){
+    var warna = s.persen >= 80 ? "ok" : s.persen >= 50 ? "warn" : "bad";
+    return '<tr><td class="num">' + esc(s.kode) + '</td>' +
+      '<td class="nm">' + esc(s.nama) + '<span class="sub-grup">' + esc(s.grup || "—") + '</span></td>' +
+      '<td class="mini kol-grup">' + esc(s.grup || "—") + '</td>' +
+      '<td class="num">' + s.hadir + '</td>' +
+      '<td class="num">' + s.telat + '</td>' +
+      '<td class="num">' + s.absen + '</td>' +
+      '<td class="persen"><span class="angka">' + s.persen + '%</span>' +
+        '<span class="bar"><i class="' + warna + '" style="width:' + s.persen + '%"></i></span></td></tr>';
+  }).join("");
+
+  return '' +
+  '<div class="col">' +
+    '<div class="card">' +
+      '<div class="rekapbar">' +
+        '<span class="mini">Periode</span>' +
+        '<div class="seg" id="periodeSeg">' + pilihan + '</div>' +
+        '<span class="mini">' + r.pertemuan + ' pertemuan tercatat</span>' +
+        '<button class="btn small push" data-act="xlsxDasbor">' + IKON.unduh + 'Unduh Excel</button>' +
+      '</div>' +
+      (r.pertemuan ? '<div class="trend">' + grafikDasbor() + '</div>' : '') +
+    '</div>' +
+    '<div class="stats empat">' +
+      '<div class="stat"><div class="k">Pertemuan</div><div class="v">' + r.pertemuan + '</div></div>' +
+      '<div class="stat s-hadir"><div class="k">Rata-rata hadir</div><div class="v">' + r.rata + '<small>%</small></div></div>' +
+      '<div class="stat s-telat"><div class="k">Total terlambat</div><div class="v">' + r.telat + '</div></div>' +
+      '<div class="stat"><div class="k">Selalu hadir</div><div class="v">' + r.penuh +
+        '<small>dari ' + r.peserta + '</small></div></div>' +
+    '</div>' +
+    '<div class="card">' +
+      '<div class="card-head"><h2>Kehadiran per peserta</h2>' +
+        '<span class="note">' + (r.pertemuan ? 'dari ' + r.pertemuan + ' pertemuan' : '') + '</span></div>' +
+      (r.pertemuan
+        ? '<div class="tablewrap"><table><thead><tr>' +
+            th("Kode","kode") + th("Nama","nama") + th("Kelas / divisi","grup","kol-grup") +
+            th("Hadir","hadir") + th("Telat","telat") + th("Absen","absen") + th("Kehadiran","persen") +
+          '</tr></thead><tbody>' + rows + '</tbody></table></div>'
+        : '<div class="empty">' + IKON.kosong + '<b>Belum ada pertemuan tercatat</b>' +
+          '<span>Persentase muncul setelah ada pemindaian. Hari tanpa pemindaian tidak dihitung sebagai pertemuan.</span></div>') +
     '</div>' +
   '</div>';
 }
@@ -11947,7 +12161,8 @@ function unduhQR(kode){
 
 /* ---------- interaksi ---------- */
 function ubahUrutan(kolom){
-  var u = (state.tab === "rekap") ? state.urutRekap : state.urutPeserta;
+  var u = (state.tab === "rekap") ? state.urutRekap
+        : (state.tab === "dasbor") ? state.urutDasbor : state.urutPeserta;
   if(u.kolom === kolom) u.arah = (u.arah === "asc") ? "desc" : "asc";
   else { u.kolom = kolom; u.arah = "asc"; }
   gambarUlang();
@@ -11956,7 +12171,7 @@ function ubahUrutan(kolom){
 document.addEventListener("click", function(ev){
   var kepala = ev.target.closest("[data-urut]");
   if(kepala){ ubahUrutan(kepala.dataset.urut); return; }
-  var t = ev.target.closest("[data-act], [data-tab], [data-mode]");
+  var t = ev.target.closest("[data-act], [data-tab], [data-mode], [data-periode]");
   if(!t) return;
 
   if(t.dataset.tab){
@@ -11968,6 +12183,7 @@ document.addEventListener("click", function(ev){
     return;
   }
   if(t.dataset.mode){ state.mode = t.dataset.mode; gambarUlang(); return; }
+  if(t.dataset.periode !== undefined){ state.periode = +t.dataset.periode; gambarUlang(); return; }
 
   var act = t.dataset.act;
   if(act === "start")      mulaiKamera();
@@ -11993,6 +12209,7 @@ document.addEventListener("click", function(ev){
     unduh("peserta-" + tglISO() + ".csv", "﻿" + baris);
   }
   else if(act === "xlsxPeserta") pesertaExcel();
+  else if(act === "xlsxDasbor") dasborExcel();
   else if(act === "xlsxRekap") rekapExcel();
   else if(act === "csvRekap"){
     var iso = state.tglRekap;
