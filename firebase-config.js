@@ -1,21 +1,20 @@
-/* Konfigurasi Firebase.
+/* Konfigurasi Firebase untuk proyek absensi-qr-c7be4.
  *
- * Ganti nilai di bawah dengan milik proyek Anda:
- *   Firebase Console -> ikon gerigi -> Project settings -> Your apps -> Web app
- *   -> "SDK setup and configuration" -> Config.  Salin isi objek firebaseConfig.
+ * Nilai-nilai ini memang tidak rahasia: setiap aplikasi web Firebase mengirimkannya
+ * ke browser pengunjung. Yang melindungi data adalah aturan keamanan Firestore
+ * (hanya pengguna yang sudah masuk boleh membaca dan menulis) dan daftar akun di
+ * Authentication -- bukan kerahasiaan kunci ini.
  *
- * Nilai-nilai ini memang tidak rahasia; Firebase mengandalkan aturan keamanan
- * Firestore dan login pengguna untuk melindungi data, bukan menyembunyikan kunci.
- * Karena itu jangan lupa memasang aturan yang ada di README sebelum dipakai serius.
+ * databaseURL dan measurementId dari console sengaja tidak disertakan karena
+ * aplikasi ini tidak memakai Realtime Database maupun Analytics.
  *
- * Selama masih berisi "GANTI...", aplikasi tetap berjalan seperti biasa dengan
- * penyimpanan lokal di perangkat masing-masing.
+ * Sumber: Firebase Console -> Project settings -> General -> Your apps -> Config.
  */
 window.FIREBASE_CONFIG = {
-  apiKey: "GANTI_apiKey",
-  authDomain: "GANTI_projectId.firebaseapp.com",
-  projectId: "GANTI_projectId",
-  storageBucket: "GANTI_projectId.firebasestorage.app",
-  messagingSenderId: "GANTI_messagingSenderId",
-  appId: "GANTI_appId"
+  apiKey: "AIzaSyAEuia4LBdNHv-YPiNYpwvFCT94TTPRjFQ",
+  authDomain: "absensi-qr-c7be4.firebaseapp.com",
+  projectId: "absensi-qr-c7be4",
+  storageBucket: "absensi-qr-c7be4.firebasestorage.app",
+  messagingSenderId: "621682440316",
+  appId: "1:621682440316:web:057bb6016e9de6816531f9"
 };
