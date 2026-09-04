@@ -10198,14 +10198,35 @@ header.top{background:var(--surface); border-bottom:1px solid var(--line); posit
 .chip.on{border-color:var(--accent); color:var(--accent); background:var(--accent-soft)}
 .chip.on .dot{background:var(--accent)}
 
-nav.tabs{display:flex; gap:2px; border-bottom:1px solid var(--line); background:var(--surface)}
-nav.tabs button{
-  appearance:none; background:none; border:0; border-bottom:2.5px solid transparent;
-  padding:10px 16px 11px; cursor:pointer; color:var(--ink-2);
-  font-family:Archivo,sans-serif; font-weight:600; font-size:14px;
+.bar-nav{position:relative; display:flex; align-items:center; border-top:1px solid var(--line);
+  border-bottom:1px solid var(--line); background:var(--surface); margin:0 -6px}
+.menu-tombol{
+  appearance:none; background:none; border:0; cursor:pointer; color:var(--ink);
+  display:inline-flex; align-items:center; gap:11px; padding:10px 14px; border-radius:9px;
+  font-family:Archivo,sans-serif; font-weight:600; font-size:14.5px; transition:background .12s;
 }
-nav.tabs button:hover{color:var(--ink)}
-nav.tabs button[aria-selected="true"]{color:var(--accent); border-bottom-color:var(--accent)}
+.menu-tombol:hover{background:var(--surface-2)}
+.ikon-menu{display:flex; flex-direction:column; justify-content:center; gap:4px; width:18px; height:14px}
+.ikon-menu i{display:block; height:2px; border-radius:2px; background:var(--accent); transition:transform .18s, opacity .14s}
+.menu-tombol[aria-expanded="true"] .ikon-menu i:nth-child(1){transform:translateY(6px) rotate(45deg)}
+.menu-tombol[aria-expanded="true"] .ikon-menu i:nth-child(2){opacity:0}
+.menu-tombol[aria-expanded="true"] .ikon-menu i:nth-child(3){transform:translateY(-6px) rotate(-45deg)}
+@media (prefers-reduced-motion:reduce){ .ikon-menu i{transition:none} }
+
+.tirai{position:fixed; inset:0; z-index:35}
+.menu-panel{
+  position:absolute; top:calc(100% + 7px); left:6px; z-index:40; min-width:212px;
+  background:var(--surface); border:1px solid var(--line); border-radius:12px;
+  box-shadow:var(--shadow); padding:6px; display:flex; flex-direction:column; gap:2px;
+}
+.menu-panel button{
+  appearance:none; border:0; background:none; cursor:pointer; text-align:left;
+  padding:10px 13px; border-radius:8px; color:var(--ink-2);
+  font-family:Archivo,sans-serif; font-weight:600; font-size:14px; transition:background .12s, color .12s;
+}
+.menu-panel button:hover{background:var(--surface-2); color:var(--ink)}
+.menu-panel button[aria-current="page"]{background:var(--accent-soft); color:var(--accent)}
+@media (max-width:520px){ .menu-panel{left:6px; right:6px} }
 main{padding:22px 0 60px}
 
 .card{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius)}
@@ -10424,7 +10445,7 @@ tbody tr{transition:background .12s}
   .clock .tgl{font-size:11.5px}
   #simpanChip{order:9; flex-basis:100%; justify-content:center}
   #tombolKeluar{order:10}
-  nav.tabs button{padding:10px 13px 11px; font-size:13.5px}
+  .menu-tombol{padding:10px 12px; font-size:14px}
   main{padding:16px 0 48px}
   .wrap{padding:0 14px}
   .card-pad, .card-head, .scanbar, .manual, .rekapbar{padding-left:14px; padding-right:14px}
@@ -10493,12 +10514,20 @@ td.nm{white-space:nowrap}
     </div>
   </div>
   <div class="wrap">
-    <nav class="tabs" role="tablist" id="tabs">
-      <button role="tab" data-tab="scan" aria-selected="true">Pindai</button>
-      <button role="tab" data-tab="peserta" aria-selected="false">Peserta</button>
-      <button role="tab" data-tab="rekap" aria-selected="false">Rekap</button>
-      <button role="tab" data-tab="dasbor" aria-selected="false">Dasbor</button>
-    </nav>
+    <div class="bar-nav">
+      <button class="menu-tombol" id="tombolMenu" aria-expanded="false" aria-controls="menuNav"
+              aria-haspopup="true" aria-label="Buka menu navigasi">
+        <span class="ikon-menu" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span id="tabAktif">Pindai</span>
+      </button>
+      <div class="tirai" id="tiraiMenu" hidden></div>
+      <nav class="menu-panel" id="menuNav" role="menu" aria-label="Navigasi" hidden>
+        <button role="menuitem" data-tab="scan">Pindai</button>
+        <button role="menuitem" data-tab="peserta">Peserta</button>
+        <button role="menuitem" data-tab="rekap">Rekap</button>
+        <button role="menuitem" data-tab="dasbor">Dasbor</button>
+      </nav>
+    </div>
   </div>
 </header>
 
@@ -11603,7 +11632,29 @@ function csvBaris(v){
 }
 
 /* ---------- render ---------- */
-function gambarUlang(){ renderMasuk(); renderBanner(); renderPanel(); }
+var JUDUL_TAB = {scan:"Pindai", peserta:"Peserta", rekap:"Rekap", dasbor:"Dasbor"};
+
+function bukaMenu(buka){
+  var tombol = $("#tombolMenu"), panel = $("#menuNav"), tirai = $("#tiraiMenu");
+  if(!tombol || !panel) return;
+  tombol.setAttribute("aria-expanded", String(buka));
+  panel.hidden = !buka;
+  if(tirai) tirai.hidden = !buka;
+  if(buka){
+    var pertama = panel.querySelector('button[aria-current="page"]') || panel.querySelector("button");
+    if(pertama) pertama.focus();
+  }
+}
+function tandaiTab(){
+  var label = $("#tabAktif");
+  if(label) label.textContent = JUDUL_TAB[state.tab] || "Menu";
+  Array.prototype.forEach.call(document.querySelectorAll("#menuNav button"), function(b){
+    if(b.dataset.tab === state.tab) b.setAttribute("aria-current", "page");
+    else b.removeAttribute("aria-current");
+  });
+}
+
+function gambarUlang(){ tandaiTab(); renderMasuk(); renderBanner(); renderPanel(); }
 
 function renderMasuk(){
   var host = $("#masukHost");
@@ -12169,6 +12220,11 @@ function ubahUrutan(kolom){
 }
 
 document.addEventListener("click", function(ev){
+  if(ev.target.closest("#tombolMenu")){
+    bukaMenu($("#tombolMenu").getAttribute("aria-expanded") !== "true");
+    return;
+  }
+  if(ev.target.id === "tiraiMenu"){ bukaMenu(false); return; }
   var kepala = ev.target.closest("[data-urut]");
   if(kepala){ ubahUrutan(kepala.dataset.urut); return; }
   var t = ev.target.closest("[data-act], [data-tab], [data-mode], [data-periode]");
@@ -12176,10 +12232,9 @@ document.addEventListener("click", function(ev){
 
   if(t.dataset.tab){
     state.tab = t.dataset.tab;
-    Array.prototype.forEach.call(document.querySelectorAll("#tabs button"), function(b){
-      b.setAttribute("aria-selected", String(b.dataset.tab === state.tab));
-    });
+    bukaMenu(false);
     gambarUlang();
+    var tb = $("#tombolMenu"); if(tb) tb.focus();
     return;
   }
   if(t.dataset.mode){ state.mode = t.dataset.mode; gambarUlang(); return; }
@@ -12249,7 +12304,10 @@ document.addEventListener("keydown", function(ev){
     ev.preventDefault();
     if(ev.target.value.trim()){ proses(ev.target.value); ev.target.value = ""; }
   }
-  if(ev.key === "Escape" && $("#modal")) tutupModal();
+  if(ev.key === "Escape"){
+    if($("#menuNav") && !$("#menuNav").hidden){ bukaMenu(false); $("#tombolMenu").focus(); return; }
+    if($("#modal")) tutupModal();
+  }
 });
 
 document.addEventListener("change", function(ev){
