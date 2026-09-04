@@ -10505,6 +10505,18 @@ tbody tr{transition:background .12s}
 .th-urut .panah{display:inline-block; width:11px; margin-left:3px; font-size:11px}
 td.nm{white-space:nowrap}
 .sub-grup{display:none}
+.bar-bagian{display:flex; gap:4px; border-bottom:1px solid var(--line); background:var(--surface)}
+.tab-bagian{
+  appearance:none; background:none; border:0; border-bottom:2.5px solid transparent;
+  padding:11px 18px 12px; cursor:pointer; color:var(--ink-2);
+  font-family:Archivo,sans-serif; font-weight:600; font-size:14.5px; white-space:nowrap;
+}
+.tab-bagian:hover{color:var(--ink)}
+.tab-bagian[aria-selected="true"]{color:var(--accent); border-bottom-color:var(--accent)}
+@media (max-width:600px){
+  .tab-bagian{flex:1; padding:11px 10px 12px; font-size:13.5px; text-align:center}
+}
+
 .judul-orang{font-size:16px !important; text-transform:none !important; letter-spacing:-.01em !important}
 .daftar-nilai{list-style:none; margin:0; padding:0}
 .nilai-baris{display:grid; grid-template-columns:auto 1fr auto; gap:12px; align-items:start;
@@ -10596,6 +10608,10 @@ textarea{width:100%; padding:8px 11px; border:1px solid var(--line-strong); bord
     </div>
   </div>
   <div class="wrap">
+    <div class="bar-bagian" role="tablist" aria-label="Bagian aplikasi">
+      <button role="tab" class="tab-bagian" data-bagian="absensi" aria-selected="true">Absensi QR</button>
+      <button role="tab" class="tab-bagian" data-bagian="evaluasi" id="tabBagianEval" aria-selected="false" hidden>Evaluasi Staff</button>
+    </div>
     <div class="bar-nav">
       <button class="menu-tombol" id="tombolMenu" aria-expanded="false" aria-controls="menuNav"
               aria-haspopup="true" aria-label="Buka menu navigasi">
@@ -10604,12 +10620,12 @@ textarea{width:100%; padding:8px 11px; border:1px solid var(--line-strong); bord
       </button>
       <div class="tirai" id="tiraiMenu" hidden></div>
       <nav class="menu-panel" id="menuNav" role="menu" aria-label="Navigasi" hidden>
-        <button role="menuitem" data-tab="scan">Pindai</button>
-        <button role="menuitem" data-tab="peserta">Peserta</button>
-        <button role="menuitem" data-tab="rekap">Rekap</button>
-        <button role="menuitem" data-tab="evaluasi" id="menuEvaluasi" hidden>Evaluasi</button>
-        <button role="menuitem" data-tab="dasbor">Dasbor</button>
-        <button role="menuitem" data-tab="pengaturan">Pengaturan</button>
+        <button role="menuitem" data-tab="scan" data-bagian="absensi">Pindai</button>
+        <button role="menuitem" data-tab="peserta" data-bagian="absensi">Peserta</button>
+        <button role="menuitem" data-tab="rekap" data-bagian="absensi">Rekap</button>
+        <button role="menuitem" data-tab="evaluasi" data-bagian="evaluasi">Daftar staff</button>
+        <button role="menuitem" data-tab="dasbor" data-bagian="absensi">Dasbor</button>
+        <button role="menuitem" data-tab="pengaturan" data-bagian="semua">Pengaturan</button>
       </nav>
     </div>
   </div>
@@ -10677,6 +10693,7 @@ var state = {
   evaluasi: [],                      // {id, kode, tanggal, nilai, catatan, dibuat}
   penilai: false,                    // akun ini boleh membuka bagian Evaluasi
   bukaEval: null,                    // kode peserta yang sedang dilihat riwayatnya
+  bagian: "absensi",                 // "absensi" atau "evaluasi"
   kameraPesan: "",
   contohHari: contohHari()
 };
@@ -10737,8 +10754,13 @@ async function hapusEvaluasi(id){
   }
   gambarUlang();
 }
+/* Divisi seperti "Staff of Professionalism" langsung dikenali sebagai staff.
+   Centang manual tetap ada untuk jabatan yang tidak memakai penamaan itu. */
+function apakahStaff(p){
+  return !!p.staff || /^\s*staff\b/i.test(String(p.grup || ""));
+}
 function daftarStaff(){
-  return daftarPeserta().filter(function(p){ return p.staff; });
+  return daftarPeserta().filter(apakahStaff);
 }
 
 /* ---------- akses data ---------- */
@@ -11708,7 +11730,7 @@ var KEPALA_REKAP = ["Tanggal","Kode","Nama","Kelas / Divisi","Jam Masuk","Jam Pu
 var KEPALA_PESERTA = ["Kode","Nama","Kelas / Divisi","Status","Isi QR"];
 function barisPeserta(){
   return daftarPeserta().map(function(p){
-    return [p.kode, p.nama, p.grup || "", p.staff ? "Staff" : "Anggota", "PRESENSI:" + p.kode];
+    return [p.kode, p.nama, p.grup || "", apakahStaff(p) ? "Staff" : "Anggota", "PRESENSI:" + p.kode];
   });
 }
 function pesertaExcel(){
@@ -11894,10 +11916,29 @@ function viewTanpaAkses(){
     '<span>Akun Anda hanya memiliki akses ke absensi QR. Minta pengurus inti membuka ' +
     'akses evaluasi bila memang diperlukan.</span></div></div>';
 }
+var BAGIAN_TAB = {scan:"absensi", peserta:"absensi", rekap:"absensi", dasbor:"absensi",
+                  evaluasi:"evaluasi", pengaturan:"semua"};
+
 function tandaiTab(){
-  var m = $("#menuEvaluasi");
-  if(m) m.hidden = !state.penilai;
-  if(!state.penilai && state.tab === "evaluasi") state.tab = "scan";
+  // Tanpa hak penilai, bagian evaluasi tidak ada sama sekali
+  if(!state.penilai){
+    if(state.bagian === "evaluasi") state.bagian = "absensi";
+    if(state.tab === "evaluasi") state.tab = "scan";
+  }
+  var tabEval = $("#tabBagianEval");
+  if(tabEval) tabEval.hidden = !state.penilai;
+
+  state.bagian = BAGIAN_TAB[state.tab] === "evaluasi" ? "evaluasi"
+               : BAGIAN_TAB[state.tab] === "absensi" ? "absensi"
+               : state.bagian;
+
+  Array.prototype.forEach.call(document.querySelectorAll(".tab-bagian"), function(b){
+    b.setAttribute("aria-selected", String(b.dataset.bagian === state.bagian));
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("#menuNav button"), function(b){
+    var milik = b.dataset.bagian;
+    b.hidden = !(milik === "semua" || milik === state.bagian);
+  });
   var label = $("#tabAktif");
   if(label) label.textContent = JUDUL_TAB[state.tab] || "Menu";
   Array.prototype.forEach.call(document.querySelectorAll("#menuNav button"), function(b){
@@ -12055,7 +12096,7 @@ function viewPeserta(){
   var rows = ps.map(function(p){
     return '<tr><td class="num">' + esc(p.kode) + '</td>' +
       '<td class="nm">' + esc(p.nama) +
-        (p.staff ? ' <span class="tanda-staff">Staff</span>' : '') +
+        (apakahStaff(p) ? ' <span class="tanda-staff">Staff</span>' : '') +
         '<span class="sub-grup">' + esc(p.grup || "—") + '</span></td>' +
       '<td class="mini kol-grup">' + esc(p.grup || "—") + '</td>' +
       '<td class="act">' +
@@ -12072,7 +12113,7 @@ function viewPeserta(){
   '<div class="col">' +
     '<div class="card">' +
       '<div class="card-head"><h2>Tambah peserta</h2>' +
-        '<span class="note">Kode menjadi isi QR-nya</span></div>' +
+        '<span class="note">Divisi berawalan “Staff” otomatis ikut dievaluasi</span></div>' +
       '<div class="card-pad">' +
         '<form class="formgrid" id="formPeserta">' +
           '<div class="field span"><label for="fNama">Nama lengkap</label>' +
@@ -12083,7 +12124,7 @@ function viewPeserta(){
             '<input id="fGrup" placeholder="XII IPA 1"></div>' +
           '<div class="field centang"><label for="fStaff">Status</label>' +
             '<label class="kotak"><input id="fStaff" type="checkbox">' +
-            '<span>Staff — ikut dievaluasi</span></label></div>' +
+            '<span>Tandai staff</span></label></div>' +
           '<button class="btn primary" type="submit">' + IKON.tambah + 'Tambah</button>' +
         '</form>' +
       '</div>' +
@@ -12651,6 +12692,15 @@ document.addEventListener("click", function(ev){
     return;
   }
   if(ev.target.id === "tiraiMenu"){ bukaMenu(false); return; }
+  var bag = ev.target.closest("[data-bagian][role=tab]");
+  if(bag){
+    state.bagian = bag.dataset.bagian;
+    state.tab = (state.bagian === "evaluasi") ? "evaluasi" : "scan";
+    state.bukaEval = null;
+    gambarUlang();
+    window.scrollTo(0, 0);
+    return;
+  }
   if(ev.target.closest("#tombolAkun")){ bukaAkun($("#menuAkun").hidden); return; }
   if(ev.target.id === "tiraiAkun"){ bukaAkun(false); return; }
   if(!ev.target.closest("#menuAkun")) bukaAkun(false);

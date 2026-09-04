@@ -144,7 +144,15 @@ supaya tidak ada akun yang bisa menaikkan haknya sendiri dari dalam aplikasi.
 
 ## Evaluasi staff
 
-Hanya peserta yang dicentang **Staff** di tab Peserta yang muncul di bagian evaluasi.
+Aplikasi terbagi dua tab besar di bagian atas: **Absensi QR** dan **Evaluasi Staff**.
+Tab kedua hanya muncul untuk akun penilai, dan isi menunya menyesuaikan tab yang aktif.
+
+Peserta dianggap staff bila **Kelas / Divisi**-nya diawali kata "Staff", misalnya
+`Staff of Professionalism` atau `Staff of Academic`. Jadi daftar peserta yang sudah ada
+langsung terbaca tanpa perlu disunting satu per satu.
+
+Untuk jabatan yang tidak memakai penamaan itu, tersedia centang **Tandai staff** di form
+peserta sebagai penunjukan manual.
 
 Satu penilaian berisi tanggal, nilai 0–100, dan catatan. Penilaian boleh dibuat kapan
 saja dan sebanyak yang diperlukan — **penilaian lama tidak pernah tertimpa**, sehingga
