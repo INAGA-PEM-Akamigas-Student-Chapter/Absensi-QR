@@ -10164,7 +10164,7 @@ body{
   font-size:15px; line-height:1.55; margin:0;
 }
 h1,h2,h3{font-family:Archivo,"Segoe UI",system-ui,sans-serif; margin:0; text-wrap:balance; letter-spacing:-.01em}
-button,input{font:inherit; color:inherit}
+button,input,select{font:inherit; color:inherit}
 :focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:4px}
 .mono{font-family:"IBM Plex Mono",ui-monospace,monospace; font-variant-numeric:tabular-nums}
 .wrap{max-width:1120px; margin:0 auto; padding:0 20px}
@@ -10344,6 +10344,17 @@ main{padding:22px 0 60px}
 .setelan .row-f .seg{flex:none}
 .setelan .row-f .nilai{font-family:"IBM Plex Mono",monospace; font-size:14px; color:var(--ink-2); white-space:nowrap}
 .setelan .card-pad.rows{gap:16px}
+.lencana{margin-left:auto; padding:3px 10px; border-radius:999px; font-size:11.5px; font-weight:600;
+  letter-spacing:.02em; border:1px solid transparent}
+.lencana.admin{background:var(--accent-soft); color:var(--accent); border-color:var(--accent)}
+.lencana.petugas{background:var(--ok-soft); color:var(--ok)}
+.lencana.pengamat{background:var(--sunk); color:var(--muted); border-color:var(--line-strong)}
+.hint.peringatan{color:var(--warn); background:var(--warn-soft); padding:9px 11px; border-radius:8px;
+  border:1px solid color-mix(in srgb,var(--warn) 30%, transparent)}
+select{padding:7px 10px; border:1px solid var(--line-strong); border-radius:8px;
+  background:var(--surface-2); color:inherit; font:inherit}
+select:disabled{opacity:.55}
+.peran-pilih{padding:5px 8px; font-size:13px}
 @media (max-width:560px){
   .setelan .row-f{flex-direction:column; align-items:stretch; gap:9px}
   .setelan .row-f .seg{width:100%}
@@ -10609,9 +10620,29 @@ var state = {
   periode: 30,                       // 7, 30, atau 0 untuk semua yang tercatat
   tampilan: {tema:"otomatis", suara:true},
   batasHari: 60,                     // berapa hari riwayat yang dimuat dari server
+  akun: null,                        // {email, nama, peran} saat memakai Firebase
+  pengguna: [],                      // daftar akun, hanya terisi untuk admin
   kameraPesan: "",
   contohHari: contohHari()
 };
+
+/* ---------- peran akun ----------
+   Pemeriksaan di sini hanya menyembunyikan tombol yang tidak berlaku; penegakan
+   sebenarnya ada di aturan keamanan Firestore. Tanpa Firebase (penyimpanan lokal
+   di satu perangkat) tidak ada peran, jadi semuanya diperlakukan sebagai admin. */
+var PERAN = {
+  admin:   {nama:"Admin",   ket:"Mengelola peserta, aturan jam, dan daftar akun."},
+  petugas: {nama:"Petugas", ket:"Memindai dan mencatat kehadiran."},
+  pengamat:{nama:"Pengamat",ket:"Hanya melihat rekap dan dasbor."}
+};
+function peran(){
+  if(state.storage !== "firebase") return "admin";
+  return (state.akun && state.akun.peran) || "admin";
+}
+function bolehKelolaPeserta(){ return peran() === "admin"; }
+function bolehAturan(){ return peran() === "admin"; }
+function bolehKelolaPengguna(){ return peran() === "admin"; }
+function bolehPindai(){ return peran() === "admin" || peran() === "petugas"; }
 
 /* ---------- akses data ---------- */
 /* localeCompare dengan numeric:true membuat "2" mendahului "10",
@@ -10836,6 +10867,7 @@ function mulaiFirebase(){
       }else{
         state.storage = "lokal";
         state.peserta = []; state.hari = {}; state.demo = true;
+        state.akun = null; state.pengguna = [];
       }
       chipSimpan(); gambarUlang();
       if(pertama){ pertama = false; res(true); }
@@ -10853,7 +10885,53 @@ function muatUlangRiwayat(){
     toast("ok", "Riwayat dimuat ulang", state.batasHari + " hari terakhir");
   }
 }
+function pasangAkunFB(){
+  var surel = fbUser && fbUser.email;
+  if(!surel) return;
+
+  fbLepas.push(fb.doc("pengguna/" + surel).onSnapshot(function(snap){
+    if(snap.exists){
+      var v = snap.data() || {};
+      state.akun = {email: surel, nama: v.nama || "", peran: v.peran || "pengamat", terdaftar: true};
+    }else{
+      // Belum ada di daftar pengguna. Diperlakukan admin agar pemasang pertama
+      // tidak terkunci; aturan Firestore tetap yang menentukan sebenarnya.
+      state.akun = {email: surel, nama: "", peran: "admin", terdaftar: false};
+    }
+    chipSimpan(); gambarUlang();
+  }, function(){
+    state.akun = {email: surel, nama: "", peran: "admin", terdaftar: false};
+    gambarUlang();
+  }));
+
+  fbLepas.push(fb.collection("pengguna").onSnapshot(function(snap){
+    var arr = [];
+    snap.forEach(function(d){
+      var v = d.data() || {};
+      arr.push({email: v.email || d.id, nama: v.nama || "", peran: v.peran || "pengamat"});
+    });
+    arr.sort(function(a, b){ return bandingAlami(a.email, b.email); });
+    state.pengguna = arr;
+    gambarUlang();
+  }, function(){ state.pengguna = []; }));
+}
+
+async function simpanPengguna(surel, data){
+  if(!fb) return;
+  try{
+    await fb.doc("pengguna/" + surel).set(Object.assign({email: surel}, data), {merge:true});
+  }catch(e){
+    toast("bad", "Gagal menyimpan akun", pesanFirestore(e && e.code));
+  }
+}
+async function hapusPengguna(surel){
+  if(!fb) return;
+  try{ await fb.doc("pengguna/" + surel).delete(); }
+  catch(e){ toast("bad", "Gagal menghapus akun", pesanFirestore(e && e.code)); }
+}
+
 function pasangSnapshotFB(){
+  pasangAkunFB();
   fbLepas.push(fb.collection("peserta").onSnapshot(function(snap){
     var arr = [];
     snap.forEach(function(d){
@@ -10906,8 +10984,8 @@ function cadangkanLokal(){
 function pesanFirestore(kode){
   if(kode === "permission-denied"){
     return window.APPCHECK_SITE_KEY
-      ? "Ditolak Firestore. Dua kemungkinan: email Anda belum ada di daftar izin pada Rules, atau App Check menolak permintaan ini."
-      : "Ditolak Firestore. Email Anda kemungkinan belum ada di daftar izin pada Rules.";
+      ? "Ditolak Firestore. Dua kemungkinan: email Anda belum terdaftar di koleksi pengguna, atau App Check menolak permintaan ini."
+      : "Ditolak Firestore. Email Anda kemungkinan belum terdaftar di koleksi pengguna, atau perannya tidak mengizinkan tindakan ini.";
   }
   if(kode === "unavailable") return "Tidak ada koneksi ke Firestore. Data yang dipindai tersimpan luring dan terkirim saat koneksi kembali.";
   return "Gagal memuat (" + (kode || "tidak diketahui") + ").";
@@ -11784,6 +11862,21 @@ function renderPanel(){
 
 function viewScan(){
   var iso = tglISO(), r = ringkas(iso);
+  if(!bolehPindai()){
+    return '<div class="col">' +
+      '<div class="stats">' +
+        '<div class="stat s-hadir"><div class="k">Hadir</div><div class="v">' + r.hadir +
+          '<small>dari ' + r.total + '</small></div></div>' +
+        '<div class="stat s-telat"><div class="k">Terlambat</div><div class="v">' + r.telat + '</div></div>' +
+        '<div class="stat s-belum"><div class="k">Belum hadir</div><div class="v">' + r.belum + '</div></div>' +
+        bilahRingkas(r) +
+      '</div>' +
+      '<div class="card"><div class="empty">' + IKON.kosong +
+        '<b>Pemindaian tidak tersedia untuk peran Pengamat</b>' +
+        '<span>Anda tetap dapat melihat Rekap dan Dasbor. Minta admin mengubah peran Anda ' +
+        'menjadi Petugas bila perlu mencatat kehadiran.</span></div></div>' +
+    '</div>';
+  }
   var ph = jalan ? "" :
     (state.kameraPesan
       ? '<div class="ph"><strong>Kamera tidak bisa dibuka</strong>' + esc(state.kameraPesan) +
@@ -11830,11 +11923,21 @@ function viewScan(){
         '<div class="card-head"><h2>Aktivitas terakhir</h2><span class="note">' + tglPanjang(iso) + '</span></div>' +
         logHTML() +
       '</div>' +
-      '<div class="card card-pad">' +
-        '<p class="hint m0">Tercatat <b>terlambat</b> setelah pukul <b>' + esc(batasTerlambat()) + '</b>' +
-        ' — dari jam masuk ' + esc(state.pengaturan.jamMasuk) + ' ditambah toleransi ' +
-        esc(state.pengaturan.toleransi) + ' menit. ' +
-        '<button class="tautan" data-tab="pengaturan">Ubah di Pengaturan</button></p>' +
+      '<div class="card">' +
+        '<div class="card-head"><h2>Aturan jam</h2>' +
+          '<span class="note">terlambat setelah ' + esc(batasTerlambat()) + '</span></div>' +
+        '<div class="card-pad rows">' +
+          (bolehAturan()
+            ? '<div class="row-f"><label for="jamMasuk">Jam masuk</label>' +
+                '<input id="jamMasuk" type="time" value="' + esc(state.pengaturan.jamMasuk) + '"></div>' +
+              '<div class="row-f"><label for="toleransi">Toleransi (menit)</label>' +
+                '<input id="toleransi" type="number" min="0" max="120" value="' + esc(state.pengaturan.toleransi) + '"></div>'
+            : '<div class="row-f"><label>Jam masuk</label><span class="nilai">' + esc(state.pengaturan.jamMasuk) + '</span></div>' +
+              '<div class="row-f"><label>Toleransi</label><span class="nilai">' + esc(state.pengaturan.toleransi) + ' menit</span></div>') +
+          '<p class="hint">Pindaian setelah pukul ' + esc(batasTerlambat()) +
+            ' dicatat sebagai terlambat.' +
+            (bolehAturan() ? '' : ' Hanya admin yang dapat mengubahnya.') + '</p>' +
+        '</div>' +
       '</div>' +
     '</div>' +
   '</div>' +
@@ -11867,14 +11970,17 @@ function viewPeserta(){
         '<button class="btn small" data-act="qr" data-kode="' + esc(p.kode) +
           '" title="Kartu QR" aria-label="Kartu QR ' + esc(p.nama) + '">' + IKON.qr +
           '<span class="teks-aksi">Kartu QR</span></button> ' +
-        '<button class="btn small danger" data-act="hapus" data-kode="' + esc(p.kode) +
-          '" title="Hapus" aria-label="Hapus ' + esc(p.nama) + '">' + IKON.hapus +
-          '<span class="teks-aksi">Hapus</span></button>' +
+        (bolehKelolaPeserta()
+          ? '<button class="btn small danger" data-act="hapus" data-kode="' + esc(p.kode) +
+            '" title="Hapus" aria-label="Hapus ' + esc(p.nama) + '">' + IKON.hapus +
+            '<span class="teks-aksi">Hapus</span></button>'
+          : '') +
       '</td></tr>';
   }).join("");
 
   return '' +
   '<div class="col">' +
+    (bolehKelolaPeserta() ?
     '<div class="card">' +
       '<div class="card-head"><h2>Tambah peserta</h2>' +
         '<span class="note">Kode menjadi isi QR-nya</span></div>' +
@@ -11889,7 +11995,7 @@ function viewPeserta(){
           '<button class="btn primary" type="submit">' + IKON.tambah + 'Tambah</button>' +
         '</form>' +
       '</div>' +
-    '</div>' +
+    '</div>' : '') +
     '<div class="card">' +
       '<div class="card-head"><h2>Daftar peserta</h2>' +
         '<span class="note">' + ps.length + ' orang</span>' +
@@ -11967,8 +12073,75 @@ function viewPengaturan(){
                  : "Browser di perangkat ini";
   var diServer = (state.storage === "server" || state.storage === "firebase");
 
+  var a = state.akun;
+  var kartuProfil = a ? (
+    '<div class="card">' +
+      '<div class="card-head"><h2>Profil</h2>' +
+        '<span class="lencana ' + esc(peran()) + '">' + esc(PERAN[peran()].nama) + '</span></div>' +
+      '<div class="card-pad rows">' +
+        '<div class="row-f"><label>Email</label><span class="nilai">' + esc(a.email) + '</span></div>' +
+        '<div class="row-f"><div><label for="namaProfil">Nama tampilan</label>' +
+          '<p class="hint m0">Dipakai pada catatan siapa yang memindai.</p></div>' +
+          '<input id="namaProfil" type="text" placeholder="Nama Anda" value="' + esc(a.nama || "") + '"></div>' +
+        '<p class="hint m0">' + esc(PERAN[peran()].ket) + '</p>' +
+        (a.terdaftar === false
+          ? '<p class="hint peringatan">Akun ini belum ada di daftar pengguna, jadi sementara diperlakukan sebagai admin. ' +
+            'Tambahkan diri Anda di bawah agar perannya jelas dan tercatat.</p>'
+          : '') +
+        '<div class="manual" style="padding:0">' +
+          '<button class="btn" data-act="keluar">Keluar dari akun</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>'
+  ) : '';
+
+  var kartuPengguna = (a && bolehKelolaPengguna()) ? (
+    '<div class="card">' +
+      '<div class="card-head"><h2>Akun pengguna</h2>' +
+        '<span class="note">' + state.pengguna.length + ' akun</span></div>' +
+      '<div class="card-pad">' +
+        '<form class="formgrid" id="formPengguna">' +
+          '<div class="field span"><label for="uEmail">Email akun</label>' +
+            '<input id="uEmail" type="email" required placeholder="nama@contoh.com"></div>' +
+          '<div class="field"><label for="uNama">Nama</label>' +
+            '<input id="uNama" placeholder="Nama lengkap"></div>' +
+          '<div class="field"><label for="uPeran">Peran</label>' +
+            '<select id="uPeran">' +
+              '<option value="admin">Admin</option>' +
+              '<option value="petugas" selected>Petugas</option>' +
+              '<option value="pengamat">Pengamat</option>' +
+            '</select></div>' +
+          '<button class="btn primary" type="submit">' + IKON.tambah + 'Tambah</button>' +
+        '</form>' +
+        '<p class="hint">Menambahkan di sini hanya mengatur perannya. Akun untuk masuk tetap dibuat di ' +
+          'Firebase Console → Authentication → Users.</p>' +
+      '</div>' +
+      (state.pengguna.length
+        ? '<div class="tablewrap"><table><thead><tr><th>Email</th><th>Nama</th><th>Peran</th><th></th></tr></thead><tbody>' +
+          state.pengguna.map(function(u){
+            var sendiri = (u.email === a.email);
+            return '<tr><td class="nm">' + esc(u.email) + (sendiri ? ' <span class="mini">(Anda)</span>' : '') + '</td>' +
+              '<td class="mini">' + esc(u.nama || "—") + '</td>' +
+              '<td><select class="peran-pilih" data-peran-email="' + esc(u.email) + '"' + (sendiri ? ' disabled' : '') + '>' +
+                ["admin","petugas","pengamat"].map(function(k){
+                  return '<option value="' + k + '"' + (u.peran === k ? ' selected' : '') + '>' + PERAN[k].nama + '</option>';
+                }).join("") +
+              '</select></td>' +
+              '<td class="act">' + (sendiri ? '' :
+                '<button class="btn small danger" data-act="hapusPengguna" data-kode="' + esc(u.email) +
+                '" title="Hapus akses" aria-label="Hapus akses ' + esc(u.email) + '">' + IKON.hapus +
+                '<span class="teks-aksi">Hapus</span></button>') + '</td></tr>';
+          }).join("") + '</tbody></table></div>'
+        : '<div class="empty">' + IKON.kosong + '<b>Belum ada akun terdaftar</b>' +
+          '<span>Tambahkan email pengurus di atas untuk memberi mereka peran.</span></div>') +
+    '</div>'
+  ) : '';
+
   return '' +
   '<div class="col setelan">' +
+
+    kartuProfil +
+    kartuPengguna +
 
     '<div class="card">' +
       '<div class="card-head"><h2>Tampilan</h2></div>' +
@@ -11983,20 +12156,6 @@ function viewPengaturan(){
           pilihanSeg("segSuara", state.tampilan.suara,
             [[true,"Nyala"],[false,"Mati"]], "data-suara") +
         '</div>' +
-      '</div>' +
-    '</div>' +
-
-    '<div class="card">' +
-      '<div class="card-head"><h2>Aturan jam</h2>' +
-        '<span class="note">terlambat setelah ' + esc(batasTerlambat()) + '</span></div>' +
-      '<div class="card-pad rows">' +
-        '<div class="row-f"><div><label for="jamMasuk">Jam masuk</label>' +
-          '<p class="hint m0">Batas kehadiran tepat waktu.</p></div>' +
-          '<input id="jamMasuk" type="time" value="' + esc(state.pengaturan.jamMasuk) + '"></div>' +
-        '<div class="row-f"><div><label for="toleransi">Toleransi (menit)</label>' +
-          '<p class="hint m0">Kelonggaran sebelum dihitung terlambat.</p></div>' +
-          '<input id="toleransi" type="number" min="0" max="120" value="' + esc(state.pengaturan.toleransi) + '"></div>' +
-        (diServer ? '<p class="hint">Aturan ini tersimpan di server, jadi berlaku sama di semua perangkat.</p>' : '') +
       '</div>' +
     '</div>' +
 
@@ -12390,6 +12549,10 @@ document.addEventListener("click", function(ev){
   }
   else if(act === "kosongkan"){ keluarDemo(); gambarUlang(); }
   else if(act === "cadangkan") cadangkan();
+  else if(act === "hapusPengguna"){
+    var surel = t.dataset.kode;
+    if(confirm("Cabut akses untuk " + surel + "?")) hapusPengguna(surel);
+  }
   else if(act === "hapusSemua"){
     if(confirm("Hapus SELURUH peserta dan absensi yang tersimpan di perangkat ini?" + String.fromCharCode(10,10) + "Tindakan ini tidak dapat dibatalkan.")){
       try{ localStorage.removeItem(LS); }catch(e){}
@@ -12430,6 +12593,19 @@ document.addEventListener("submit", function(ev){
     masukFirebase($("#mEmail").value.trim(), $("#mSandi").value, ev.target.querySelector("button"));
     return;
   }
+  if(ev.target.id === "formPengguna"){
+    ev.preventDefault();
+    var surel = $("#uEmail").value.trim().toLowerCase();
+    if(!surel) return;
+    if(state.pengguna.some(function(u){ return u.email === surel; })){
+      toast("bad", "Email sudah terdaftar", surel);
+      return;
+    }
+    simpanPengguna(surel, {nama: $("#uNama").value.trim(), peran: $("#uPeran").value});
+    toast("ok", "Akun ditambahkan", surel);
+    ev.target.reset();
+    return;
+  }
   if(ev.target.id !== "formPeserta") return;
   ev.preventDefault();
   var nama = $("#fNama").value.trim(), kode = $("#fKode").value.trim(), grup = $("#fGrup").value.trim();
@@ -12461,6 +12637,20 @@ document.addEventListener("keydown", function(ev){
 
 document.addEventListener("change", function(ev){
   var id = ev.target.id;
+  if(ev.target.dataset && ev.target.dataset.peranEmail){
+    simpanPengguna(ev.target.dataset.peranEmail, {peran: ev.target.value});
+    toast("ok", "Peran diperbarui", ev.target.dataset.peranEmail);
+    return;
+  }
+  if(id === "namaProfil"){
+    var nm = ev.target.value.trim();
+    if(state.akun){
+      state.akun.nama = nm;
+      simpanPengguna(state.akun.email, {nama: nm, peran: state.akun.peran});
+      toast("ok", "Nama disimpan", nm || "(kosong)");
+    }
+    return;
+  }
   if(id === "fileQR"){
     var f = ev.target.files && ev.target.files[0];
     if(f) pindaiGambar(f);
