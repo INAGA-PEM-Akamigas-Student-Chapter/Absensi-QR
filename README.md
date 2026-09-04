@@ -75,15 +75,32 @@ actions**, hilangkan centang *Enable create (sign-up)*.
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
     function diizinkan() {
       return request.auth != null
           && request.auth.token.email in [
                'email-anda@contoh.com'
              ];
     }
-    match /{document=**} {
-      allow read, write: if diizinkan();
+    function penilai() {
+      return diizinkan()
+          && exists(/databases/$(database)/documents/pengguna/$(request.auth.token.email))
+          && get(/databases/$(database)/documents/pengguna/$(request.auth.token.email)).data.penilai == true;
     }
+
+    // Bagian evaluasi: hanya akun yang ditandai penilai
+    match /evaluasi/{id} {
+      allow read, write: if penilai();
+    }
+    match /pengguna/{email} {
+      allow read:  if diizinkan();
+      allow write: if false;          // hanya lewat Firebase Console
+    }
+
+    // Bagian absensi: semua akun yang diizinkan
+    match /peserta/{kode}    { allow read, write: if diizinkan(); }
+    match /absensi/{tanggal} { allow read, write: if diizinkan(); }
+    match /pengaturan/{doc}  { allow read, write: if diizinkan(); }
   }
 }
 ```
@@ -99,8 +116,44 @@ Untuk menambah petugas, tambahkan emailnya di dalam kurung siku dipisah koma:
 Daftar email ini penting: `request.auth != null` saja tidak cukup, karena berarti
 siapa pun yang berhasil membuat akun boleh membaca dan mengubah seluruh absensi.
 
-Semua yang ada di daftar punya akses penuh yang sama — aplikasi ini tidak membedakan
-peran. Berikan akses hanya kepada pengurus yang memang perlu mengelola data.
+## Dua bagian dan dua tingkat akun
+
+Aplikasi terbagi dua: **absensi QR** dan **evaluasi staff**.
+
+| | Absensi QR | Evaluasi staff |
+|---|---|---|
+| Akun biasa | ya | — |
+| Akun penilai | ya | ya |
+
+Semua email di daftar izin bisa memakai absensi. Untuk membuka bagian evaluasi, buat
+dokumen di Firestore:
+
+**Firestore Database → koleksi `pengguna`** → Document ID: **email akun tersebut** →
+tambahkan satu kolom:
+
+| Field | Type | Value |
+|---|---|---|
+| `penilai` | boolean | `true` |
+
+Akun tanpa dokumen itu tidak melihat menu Evaluasi sama sekali, dan aturan di atas
+menolak pembacaan koleksi `evaluasi` untuknya. Penyembunyian menu hanya kenyamanan
+tampilan; aturan itulah yang benar-benar menahan.
+
+Kolom `penilai` sengaja hanya bisa diubah dari Firebase Console (`allow write: if false`),
+supaya tidak ada akun yang bisa menaikkan haknya sendiri dari dalam aplikasi.
+
+## Evaluasi staff
+
+Hanya peserta yang dicentang **Staff** di tab Peserta yang muncul di bagian evaluasi.
+
+Satu penilaian berisi tanggal, nilai 0–100, dan catatan. Penilaian boleh dibuat kapan
+saja dan sebanyak yang diperlukan — **penilaian lama tidak pernah tertimpa**, sehingga
+riwayatnya terbaca seperti rapor: nilai per tanggal, beserta rata-ratanya.
+
+**Penilaian bersifat anonim.** Identitas penilai tidak disimpan sama sekali, bukan
+sekadar disembunyikan dari tampilan — dokumen `evaluasi` hanya memuat kode peserta,
+tanggal, nilai, catatan, dan waktu pembuatan. Konsekuensinya, tidak ada cara menelusuri
+siapa yang memberi nilai tertentu, termasuk oleh pemilik proyek.
 
 ### 5. Salin konfigurasi ke repositori
 
@@ -153,7 +206,9 @@ setelah *Enforce* menyala — aplikasi berhenti berfungsi. Itulah sebabnya tahap
 ### Struktur data di Firestore
 
 ```
-peserta/<kode>          { kode, nama, grup }
+peserta/<kode>          { kode, nama, grup, staff }
+evaluasi/<id>           { kode, tanggal, nilai, catatan, dibuat }   tanpa identitas penilai
+pengguna/<email>        { penilai }                                  hanya dari Firebase Console
 absensi/<YYYY-MM-DD>    { tanggal, catatan: { <kode>: { nama, grup, masuk, pulang, status } } }
 pengaturan/umum         { jamMasuk, toleransi }
 ```

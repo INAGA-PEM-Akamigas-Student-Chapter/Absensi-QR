@@ -10505,6 +10505,27 @@ tbody tr{transition:background .12s}
 .th-urut .panah{display:inline-block; width:11px; margin-left:3px; font-size:11px}
 td.nm{white-space:nowrap}
 .sub-grup{display:none}
+.judul-orang{font-size:16px !important; text-transform:none !important; letter-spacing:-.01em !important}
+.daftar-nilai{list-style:none; margin:0; padding:0}
+.nilai-baris{display:grid; grid-template-columns:auto 1fr auto; gap:12px; align-items:start;
+  padding:13px 18px; border-bottom:1px solid var(--line)}
+.nilai-baris:last-child{border-bottom:0}
+.nilai-kiri{display:flex; flex-direction:column; align-items:center; gap:3px; min-width:56px}
+.nilai-angka{font-family:"IBM Plex Mono",monospace; font-size:20px; font-weight:600;
+  font-variant-numeric:tabular-nums; line-height:1.1}
+.nilai-angka.ok{color:var(--ok)} .nilai-angka.warn{color:var(--warn)} .nilai-angka.bad{color:var(--bad)}
+.nilai-tgl{font-size:11px; color:var(--muted); text-align:center; line-height:1.25}
+.nilai-catatan{margin:0; font-size:13.5px; line-height:1.55; overflow-wrap:anywhere}
+textarea{width:100%; padding:8px 11px; border:1px solid var(--line-strong); border-radius:8px;
+  background:var(--surface-2); color:inherit; font:inherit; resize:vertical}
+.formgrid .span{grid-column:1 / -1}
+.tanda-staff{display:inline-block; padding:1px 7px; border-radius:999px; font-size:10.5px;
+  font-weight:600; letter-spacing:.04em; text-transform:uppercase;
+  background:var(--accent-soft); color:var(--accent); vertical-align:1px}
+.field.centang{justify-content:flex-end}
+.kotak{display:flex; align-items:center; gap:8px; padding:8px 11px; border:1px solid var(--line-strong);
+  border-radius:8px; background:var(--surface-2); cursor:pointer; font-size:13.5px; white-space:nowrap}
+.kotak input{width:16px; height:16px; accent-color:var(--accent); cursor:pointer}
 .teks-aksi{display:inline}
 .lbl-pendek{display:none}
 .manual .btn, .manual label.btn{white-space:nowrap}
@@ -10586,6 +10607,7 @@ td.nm{white-space:nowrap}
         <button role="menuitem" data-tab="scan">Pindai</button>
         <button role="menuitem" data-tab="peserta">Peserta</button>
         <button role="menuitem" data-tab="rekap">Rekap</button>
+        <button role="menuitem" data-tab="evaluasi" id="menuEvaluasi" hidden>Evaluasi</button>
         <button role="menuitem" data-tab="dasbor">Dasbor</button>
         <button role="menuitem" data-tab="pengaturan">Pengaturan</button>
       </nav>
@@ -10652,9 +10674,72 @@ var state = {
   periode: 30,                       // 7, 30, atau 0 untuk semua yang tercatat
   tampilan: {tema:"otomatis", suara:true},
   batasHari: 60,                     // berapa hari riwayat yang dimuat dari server
+  evaluasi: [],                      // {id, kode, tanggal, nilai, catatan, dibuat}
+  penilai: false,                    // akun ini boleh membuka bagian Evaluasi
+  bukaEval: null,                    // kode peserta yang sedang dilihat riwayatnya
   kameraPesan: "",
   contohHari: contohHari()
 };
+
+/* ---------- evaluasi ----------
+   Setiap penilaian adalah satu dokumen tersendiri, jadi penilaian lama tidak
+   pernah tertimpa dan dua orang yang menilai bersamaan tidak saling menghapus.
+   Identitas penilai sengaja TIDAK disimpan: penilaian bersifat anonim. */
+var LS_EVAL = "presensia.evaluasi";
+
+function bacaEvalLokal(){
+  try{ return JSON.parse(localStorage.getItem(LS_EVAL) || "[]") || []; }catch(e){ return []; }
+}
+function tulisEvalLokal(){
+  try{ localStorage.setItem(LS_EVAL, JSON.stringify(state.evaluasi)); }catch(e){}
+}
+function idEvaluasi(kode){
+  return slug(kode) + "__" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+function evaluasiPeserta(kode){
+  return state.evaluasi
+    .filter(function(e){ return e.kode === kode; })
+    .sort(function(a, b){ return bandingAlami(b.tanggal, a.tanggal); });
+}
+function rataEvaluasi(kode){
+  var d = evaluasiPeserta(kode);
+  if(!d.length) return null;
+  var jml = 0;
+  d.forEach(function(e){ jml += (+e.nilai || 0); });
+  return Math.round(jml / d.length * 10) / 10;
+}
+async function simpanEvaluasi(kode, tanggal, nilai, catatan){
+  var rec = {
+    id: idEvaluasi(kode), kode: kode, tanggal: tanggal,
+    nilai: Math.max(0, Math.min(100, +nilai || 0)),
+    catatan: String(catatan || ""), dibuat: new Date().toISOString()
+  };
+  state.evaluasi = state.evaluasi.concat([rec]);
+  if(db){
+    try{ await db.collection("evaluasi").doc(rec.id).set(rec); }
+    catch(e){ toast("bad", "Gagal menyimpan penilaian", (e && e.code) || ""); }
+  }else if(fb){
+    try{ await fb.collection("evaluasi").doc(rec.id).set(rec); }
+    catch(e){ toast("bad", "Gagal menyimpan penilaian", pesanFirestore(e && e.code)); }
+  }else{
+    tulisEvalLokal();
+  }
+  gambarUlang();
+}
+async function hapusEvaluasi(id){
+  state.evaluasi = state.evaluasi.filter(function(e){ return e.id !== id; });
+  if(db){
+    try{ await db.collection("evaluasi").doc(id).delete(); }catch(e){}
+  }else if(fb){
+    try{ await fb.collection("evaluasi").doc(id).delete(); }catch(e){}
+  }else{
+    tulisEvalLokal();
+  }
+  gambarUlang();
+}
+function daftarStaff(){
+  return daftarPeserta().filter(function(p){ return p.staff; });
+}
 
 /* ---------- akses data ---------- */
 /* localeCompare dengan numeric:true membuat "2" mendahului "10",
@@ -10891,6 +10976,7 @@ function mulaiFirebase(){
       }else{
         state.storage = "lokal";
         state.peserta = []; state.hari = {}; state.demo = true;
+        state.evaluasi = []; state.penilai = false;
       }
       chipSimpan(); gambarUlang();
       if(pertama){ pertama = false; res(true); }
@@ -10913,7 +10999,7 @@ function pasangSnapshotFB(){
     var arr = [];
     snap.forEach(function(d){
       var v = d.data() || {};
-      arr.push({kode: v.kode || d.id, nama: v.nama || "(tanpa nama)", grup: v.grup || ""});
+      arr.push({kode: v.kode || d.id, nama: v.nama || "(tanpa nama)", grup: v.grup || "", staff: !!v.staff});
     });
     state.peserta = arr;
     if(arr.length) state.demo = false;
@@ -10929,6 +11015,23 @@ function pasangSnapshotFB(){
     state.hari = map;
     gambarUlang();
   }, function(e){ toast("bad", "Gagal memuat absensi", pesanFirestore(e && e.code)); }));
+
+  fbLepas.push(fb.collection("evaluasi").onSnapshot(function(snap){
+    var arr = [];
+    snap.forEach(function(d){
+      var v = d.data() || {};
+      arr.push({id: d.id, kode: v.kode || "", tanggal: v.tanggal || "",
+                nilai: +v.nilai || 0, catatan: v.catatan || "", dibuat: v.dibuat || ""});
+    });
+    state.evaluasi = arr;
+    gambarUlang();
+  }, function(){ state.evaluasi = []; }));
+
+  // Peran hanya menentukan apa yang tampil; penegakan sebenarnya ada di aturan Firestore.
+  fbLepas.push(fb.doc("pengguna/" + (fbUser && fbUser.email)).onSnapshot(function(snap){
+    state.penilai = !!(snap.exists && (snap.data() || {}).penilai);
+    gambarUlang();
+  }, function(){ state.penilai = false; gambarUlang(); }));
 
   fbLepas.push(fb.doc("pengaturan/umum").onSnapshot(function(snap){
     if(snap.exists){
@@ -11007,7 +11110,7 @@ function pasangSnapshot(){
     var arr = [];
     snap.docs.forEach(function(d){
       var v = d.data() || {};
-      arr.push({kode: v.kode || d.id, nama: v.nama || "(tanpa nama)", grup: v.grup || ""});
+      arr.push({kode: v.kode || d.id, nama: v.nama || "(tanpa nama)", grup: v.grup || "", staff: !!v.staff});
     });
     state.peserta = arr;
     if(arr.length) state.demo = false;
@@ -11023,6 +11126,17 @@ function pasangSnapshot(){
     state.hari = map;
     gambarUlang();
   }, function(err){ toast("bad", "Gagal memuat absensi", err.code); });
+
+  db.collection("evaluasi").onSnapshot(function(snap){
+    var arr = [];
+    snap.docs.forEach(function(d){
+      var v = d.data() || {};
+      arr.push({id: d.id, kode: v.kode || "", tanggal: v.tanggal || "",
+                nilai: +v.nilai || 0, catatan: v.catatan || "", dibuat: v.dibuat || ""});
+    });
+    state.evaluasi = arr;
+    gambarUlang();
+  }, function(){ state.evaluasi = []; });
 
   db.doc("pengaturan/umum").onSnapshot(function(snap){
     if(snap.exists){
@@ -11052,6 +11166,8 @@ async function siapkanPenyimpanan(){
       if(lokal.pengaturan) state.pengaturan = lokal.pengaturan;
       state.demo = false;
     }
+    state.evaluasi = bacaEvalLokal();
+    state.penilai = true;          // tanpa akun, tidak ada yang perlu dibatasi
     gambarUlang();
   }
   try{
@@ -11589,10 +11705,10 @@ function bukuXLSX(lembar){
 
 /* Satu sumber baris untuk CSV maupun Excel, supaya isinya tidak pernah berbeda. */
 var KEPALA_REKAP = ["Tanggal","Kode","Nama","Kelas / Divisi","Jam Masuk","Jam Pulang","Status"];
-var KEPALA_PESERTA = ["Kode","Nama","Kelas / Divisi","Isi QR"];
+var KEPALA_PESERTA = ["Kode","Nama","Kelas / Divisi","Status","Isi QR"];
 function barisPeserta(){
   return daftarPeserta().map(function(p){
-    return [p.kode, p.nama, p.grup || "", "PRESENSI:" + p.kode];
+    return [p.kode, p.nama, p.grup || "", p.staff ? "Staff" : "Anggota", "PRESENSI:" + p.kode];
   });
 }
 function pesertaExcel(){
@@ -11603,12 +11719,12 @@ function pesertaExcel(){
   });
   var perGrup = Object.keys(hitung).sort(bandingAlami).map(function(g){ return [g, hitung[g]]; });
 
-  // Gambar kartu QR ditanam di kolom E. Dibuat pada 264 px lalu ditampilkan 88 px
+  // Gambar kartu QR ditanam di kolom F. Dibuat pada 264 px lalu ditampilkan 88 px
   // supaya tetap tajam saat lembarnya dicetak.
   var adaQR = (typeof window.QRious === "function");
   var gambar = adaQR ? daftarPeserta().map(function(p, i){
     return {
-      kolom: 4, baris: i + 1, px: 88,
+      kolom: 5, baris: i + 1, px: 88,
       nama: "QR " + p.kode,
       data: pngKodeQR("PRESENSI:" + p.kode, 264)
     };
@@ -11617,7 +11733,7 @@ function pesertaExcel(){
   unduh("peserta-" + tglISO() + ".xlsx", bukuXLSX([
     {
       nama: "Peserta",
-      lebar: [14, 26, 22, 26, 14],
+      lebar: [14, 26, 22, 12, 26, 14],
       tinggiBaris: 70,
       gambar: gambar,
       baris: [KEPALA_PESERTA.concat(["Kartu QR"])].concat(
@@ -11752,7 +11868,7 @@ function csvBaris(v){
 }
 
 /* ---------- render ---------- */
-var JUDUL_TAB = {scan:"Pindai", peserta:"Peserta", rekap:"Rekap", dasbor:"Dasbor", pengaturan:"Pengaturan"};
+var JUDUL_TAB = {scan:"Pindai", peserta:"Peserta", rekap:"Rekap", evaluasi:"Evaluasi", dasbor:"Dasbor", pengaturan:"Pengaturan"};
 
 function bukaMenu(buka){
   var tombol = $("#tombolMenu"), panel = $("#menuNav"), tirai = $("#tiraiMenu");
@@ -11772,7 +11888,16 @@ function bukaAkun(buka){
   pop.hidden = !buka;
   if(tirai) tirai.hidden = !buka;
 }
+function viewTanpaAkses(){
+  return '<div class="card"><div class="empty">' + IKON.kosong +
+    '<b>Bagian Evaluasi tidak terbuka untuk akun ini</b>' +
+    '<span>Akun Anda hanya memiliki akses ke absensi QR. Minta pengurus inti membuka ' +
+    'akses evaluasi bila memang diperlukan.</span></div></div>';
+}
 function tandaiTab(){
+  var m = $("#menuEvaluasi");
+  if(m) m.hidden = !state.penilai;
+  if(!state.penilai && state.tab === "evaluasi") state.tab = "scan";
   var label = $("#tabAktif");
   if(label) label.textContent = JUDUL_TAB[state.tab] || "Menu";
   Array.prototype.forEach.call(document.querySelectorAll("#menuNav button"), function(b){
@@ -11829,6 +11954,7 @@ function renderPanel(){
   var p = $("#panel");
   if(state.tab === "scan")         p.innerHTML = viewScan();
   else if(state.tab === "peserta")  p.innerHTML = viewPeserta();
+  else if(state.tab === "evaluasi") p.innerHTML = state.penilai ? viewEvaluasi() : viewTanpaAkses();
   else if(state.tab === "dasbor")   p.innerHTML = viewDasbor();
   else if(state.tab === "pengaturan") p.innerHTML = viewPengaturan();
   else                              p.innerHTML = viewRekap();
@@ -11929,6 +12055,7 @@ function viewPeserta(){
   var rows = ps.map(function(p){
     return '<tr><td class="num">' + esc(p.kode) + '</td>' +
       '<td class="nm">' + esc(p.nama) +
+        (p.staff ? ' <span class="tanda-staff">Staff</span>' : '') +
         '<span class="sub-grup">' + esc(p.grup || "—") + '</span></td>' +
       '<td class="mini kol-grup">' + esc(p.grup || "—") + '</td>' +
       '<td class="act">' +
@@ -11954,6 +12081,9 @@ function viewPeserta(){
             '<input id="fKode" required placeholder="2024-007"></div>' +
           '<div class="field"><label for="fGrup">Kelas / divisi</label>' +
             '<input id="fGrup" placeholder="XII IPA 1"></div>' +
+          '<div class="field centang"><label for="fStaff">Status</label>' +
+            '<label class="kotak"><input id="fStaff" type="checkbox">' +
+            '<span>Staff — ikut dievaluasi</span></label></div>' +
           '<button class="btn primary" type="submit">' + IKON.tambah + 'Tambah</button>' +
         '</form>' +
       '</div>' +
@@ -12087,6 +12217,113 @@ function viewPengaturan(){
       '</div>' +
     '</div>' +
 
+  '</div>';
+}
+
+function warnaNilai(n){
+  return n >= 80 ? "ok" : n >= 60 ? "warn" : "bad";
+}
+function viewEvaluasi(){
+  var staff = daftarStaff();
+  var fokus = state.bukaEval ? daftarPeserta().filter(function(p){ return p.kode === state.bukaEval; })[0] : null;
+
+  if(fokus) return viewEvaluasiDetail(fokus);
+
+  var rows = staff.map(function(p){
+    var d = evaluasiPeserta(p.kode), rata = rataEvaluasi(p.kode);
+    var akhir = d[0];
+    return '<tr><td class="num">' + esc(p.kode) + '</td>' +
+      '<td class="nm">' + esc(p.nama) +
+        '<span class="sub-grup">' + esc(p.grup || "—") + '</span></td>' +
+      '<td class="mini kol-grup">' + esc(p.grup || "—") + '</td>' +
+      '<td class="num">' + d.length + '</td>' +
+      '<td class="num">' + (akhir ? esc(akhir.tanggal) : "—") + '</td>' +
+      '<td class="persen">' + (rata === null
+        ? '<span class="mini">belum dinilai</span>'
+        : '<span class="angka">' + rata + '</span>' +
+          '<span class="bar"><i class="' + warnaNilai(rata) + '" style="width:' + rata + '%"></i></span>') +
+      '</td>' +
+      '<td class="act"><button class="btn small" data-act="bukaEval" data-kode="' + esc(p.kode) + '">' +
+        'Lihat &amp; nilai</button></td></tr>';
+  }).join("");
+
+  return '' +
+  '<div class="col">' +
+    '<div class="card">' +
+      '<div class="card-head"><h2>Evaluasi staff</h2>' +
+        '<span class="note">' + staff.length + ' staff · ' + state.evaluasi.length + ' penilaian tersimpan</span></div>' +
+      '<div class="card-pad">' +
+        '<p class="hint m0">Hanya peserta bertanda <b>Staff</b> yang muncul di sini. ' +
+        'Penilaian tercatat <b>anonim</b> — nama penilai tidak disimpan. ' +
+        'Penilaian lama tidak pernah tertimpa, sehingga perkembangannya terlihat seperti rapor.</p>' +
+      '</div>' +
+    '</div>' +
+    '<div class="card">' +
+      '<div class="card-head"><h2>Daftar staff</h2></div>' +
+      (staff.length
+        ? '<div class="tablewrap"><table><thead><tr>' +
+            '<th>Kode</th><th>Nama</th><th class="kol-grup">Kelas / divisi</th>' +
+            '<th>Penilaian</th><th>Terakhir</th><th>Rata-rata</th><th></th>' +
+          '</tr></thead><tbody>' + rows + '</tbody></table></div>'
+        : '<div class="empty">' + IKON.kosong + '<b>Belum ada peserta bertanda Staff</b>' +
+          '<span>Buka tab Peserta, lalu centang <b>Staff</b> pada mereka yang perlu dievaluasi.</span></div>') +
+    '</div>' +
+  '</div>';
+}
+
+function viewEvaluasiDetail(p){
+  var d = evaluasiPeserta(p.kode), rata = rataEvaluasi(p.kode);
+  var riwayat = d.map(function(e){
+    return '<li class="nilai-baris">' +
+      '<div class="nilai-kiri">' +
+        '<span class="nilai-angka ' + warnaNilai(e.nilai) + '">' + e.nilai + '</span>' +
+        '<span class="nilai-tgl">' + esc(tglPanjang(e.tanggal)) + '</span>' +
+      '</div>' +
+      '<p class="nilai-catatan">' + (e.catatan ? esc(e.catatan) : '<span class="mini">tanpa catatan</span>') + '</p>' +
+      '<button class="btn small danger" data-act="hapusEval" data-kode="' + esc(e.id) +
+        '" title="Hapus penilaian" aria-label="Hapus penilaian ' + esc(e.tanggal) + '">' + IKON.hapus + '</button>' +
+    '</li>';
+  }).join("");
+
+  return '' +
+  '<div class="col">' +
+    '<div class="card">' +
+      '<div class="card-head">' +
+        '<button class="btn small" data-act="tutupEval">← Kembali</button>' +
+        '<h2 class="judul-orang">' + esc(p.nama) + '</h2>' +
+        '<span class="note">' + esc(p.grup || "—") + ' · kode ' + esc(p.kode) + '</span></div>' +
+      '<div class="stats">' +
+        '<div class="stat"><div class="k">Jumlah penilaian</div><div class="v">' + d.length + '</div></div>' +
+        '<div class="stat"><div class="k">Rata-rata</div><div class="v">' + (rata === null ? "—" : rata) + '</div></div>' +
+        '<div class="stat"><div class="k">Terakhir</div><div class="v">' + (d.length ? d[0].nilai : "—") + '</div></div>' +
+      '</div>' +
+    '</div>' +
+
+    '<div class="card">' +
+      '<div class="card-head"><h2>Penilaian baru</h2><span class="note">tercatat anonim</span></div>' +
+      '<div class="card-pad">' +
+        '<form id="formEval">' +
+          '<div class="formgrid">' +
+            '<div class="field"><label for="eTanggal">Tanggal</label>' +
+              '<input id="eTanggal" type="date" value="' + tglISO() + '" required></div>' +
+            '<div class="field"><label for="eNilai">Nilai (0–100)</label>' +
+              '<input id="eNilai" type="number" min="0" max="100" required placeholder="85"></div>' +
+            '<div class="field span"><label for="eCatatan">Catatan</label>' +
+              '<textarea id="eCatatan" rows="3" placeholder="Apa yang sudah baik dan apa yang perlu diperbaiki."></textarea></div>' +
+            '<button class="btn primary span" type="submit">' + IKON.tambah + 'Simpan penilaian</button>' +
+          '</div>' +
+        '</form>' +
+      '</div>' +
+    '</div>' +
+
+    '<div class="card">' +
+      '<div class="card-head"><h2>Riwayat penilaian</h2>' +
+        '<span class="note">' + d.length + ' catatan</span></div>' +
+      (d.length
+        ? '<ul class="daftar-nilai">' + riwayat + '</ul>'
+        : '<div class="empty">' + IKON.kosong + '<b>Belum ada penilaian</b>' +
+          '<span>Penilaian pertama akan muncul di sini dan tidak akan tertimpa oleh penilaian berikutnya.</span></div>') +
+    '</div>' +
   '</div>';
 }
 
@@ -12258,6 +12495,7 @@ function cadangkan(){
     aplikasi: "presensia", versi: 1, dibuat: new Date().toISOString(),
     peserta: daftarPeserta(),
     hari: state.demo ? state.contohHari : state.hari,
+    evaluasi: state.evaluasi,
     pengaturan: state.pengaturan
   }, null, 2);
   unduh("presensi-cadangan-" + tglISO() + ".json", isi);
@@ -12274,7 +12512,8 @@ async function pulihkan(file){
     return;
   }
   var jml = data.peserta.length, hari = data.hari ? Object.keys(data.hari).length : 0;
-  if(!confirm("Pulihkan " + jml + " peserta dan " + hari + " hari absensi?\n\nData yang ada sekarang akan diganti."))
+  var jmlEval = Array.isArray(data.evaluasi) ? data.evaluasi.length : 0;
+  if(!confirm("Pulihkan " + jml + " peserta, " + hari + " hari absensi, dan " + jmlEval + " penilaian?\n\nData yang ada sekarang akan diganti."))
     return;
 
   state.demo = false;
@@ -12282,6 +12521,9 @@ async function pulihkan(file){
     return {kode: String(p.kode || ""), nama: String(p.nama || "(tanpa nama)"), grup: String(p.grup || "")};
   }).filter(function(p){ return p.kode; });
   state.hari = data.hari || {};
+  state.evaluasi = Array.isArray(data.evaluasi) ? data.evaluasi.filter(function(e){
+    return e && e.kode;
+  }) : [];
   if(data.pengaturan){
     if(data.pengaturan.jamMasuk) state.pengaturan.jamMasuk = data.pengaturan.jamMasuk;
     if(data.pengaturan.toleransi != null) state.pengaturan.toleransi = data.pengaturan.toleransi;
@@ -12320,9 +12562,9 @@ async function pulihkan(file){
       toast("bad", "Sebagian data gagal diunggah", (e && e.code) || "");
     }
   }else{
-    tulisLokal();
+    tulisLokal(); tulisEvalLokal();
   }
-  toast("ok", "Cadangan dipulihkan", jml + " peserta");
+  toast("ok", "Cadangan dipulihkan", jml + " peserta, " + jmlEval + " penilaian");
   gambarUlang();
 }
 
@@ -12446,6 +12688,11 @@ document.addEventListener("click", function(ev){
     if(inp && inp.value.trim()){ proses(inp.value); inp.value = ""; inp.focus(); }
   }
   else if(act === "kosongkan"){ keluarDemo(); gambarUlang(); }
+  else if(act === "bukaEval"){ state.bukaEval = t.dataset.kode; gambarUlang(); window.scrollTo(0,0); }
+  else if(act === "tutupEval"){ state.bukaEval = null; gambarUlang(); window.scrollTo(0,0); }
+  else if(act === "hapusEval"){
+    if(confirm("Hapus penilaian ini? Riwayat yang sudah tersimpan akan berkurang.")) hapusEvaluasi(t.dataset.kode);
+  }
   else if(act === "cadangkan") cadangkan();
   else if(act === "hapusSemua"){
     if(confirm("Hapus SELURUH peserta dan absensi yang tersimpan di perangkat ini?" + String.fromCharCode(10,10) + "Tindakan ini tidak dapat dibatalkan.")){
@@ -12487,15 +12734,26 @@ document.addEventListener("submit", function(ev){
     masukFirebase($("#mEmail").value.trim(), $("#mSandi").value, ev.target.querySelector("button"));
     return;
   }
+  if(ev.target.id === "formEval"){
+    ev.preventDefault();
+    if(!state.bukaEval) return;
+    var nilai = $("#eNilai").value;
+    if(nilai === "") return;
+    simpanEvaluasi(state.bukaEval, $("#eTanggal").value || tglISO(), nilai, $("#eCatatan").value);
+    toast("ok", "Penilaian tersimpan", "Tercatat anonim");
+    $("#eNilai").value = ""; $("#eCatatan").value = "";
+    return;
+  }
   if(ev.target.id !== "formPeserta") return;
   ev.preventDefault();
   var nama = $("#fNama").value.trim(), kode = $("#fKode").value.trim(), grup = $("#fGrup").value.trim();
+  var staff = $("#fStaff") ? $("#fStaff").checked : false;
   if(!nama || !kode) return;
   if(daftarPeserta().some(function(x){ return x.kode.toLowerCase() === kode.toLowerCase(); })){
     toast("bad", "Kode sudah dipakai", kode + " sudah terdaftar.");
     return;
   }
-  simpanPeserta({kode:kode, nama:nama, grup:grup});
+  simpanPeserta({kode:kode, nama:nama, grup:grup, staff:staff});
   toast("ok", "Peserta ditambahkan", nama);
   gambarUlang();
 });
