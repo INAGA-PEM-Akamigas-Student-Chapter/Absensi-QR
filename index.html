@@ -11168,7 +11168,7 @@ function pasangSnapshot(){
     state.peserta = arr;
     if(arr.length) state.demo = false;
     gambarUlang();
-  }, function(err){ toast("bad", "Gagal memuat peserta", err.code); });
+  }, function(err){ catatPenolakan(err); });
 
   db.collection("absensi").orderBy("tanggal","desc").limit(state.batasHari).onSnapshot(function(snap){
     var map = {};
@@ -11178,7 +11178,7 @@ function pasangSnapshot(){
     });
     state.hari = map;
     gambarUlang();
-  }, function(err){ toast("bad", "Gagal memuat absensi", err.code); });
+  }, function(err){ catatPenolakan(err); });
 
   db.collection("evaluasi").onSnapshot(function(snap){
     var arr = [];
