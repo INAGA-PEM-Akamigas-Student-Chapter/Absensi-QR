@@ -10941,6 +10941,7 @@ function toast(jenis, judul, pesan){
 function tipeDari(namaFile){
   if(/\.json$/i.test(namaFile)) return "application/json;charset=utf-8";
   if(/\.png$/i.test(namaFile))  return "image/png";
+  if(/\.xlsx$/i.test(namaFile)) return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
   return "text/csv;charset=utf-8";
 }
 async function unduh(namaFile, isi, tipe){
@@ -10973,6 +10974,188 @@ async function unduh(namaFile, isi, tipe){
     toast("bad", "Gagal mengunduh", c || "");
   }
 }
+/* ---------- penulis XLSX ringkas ----------
+   Sebuah .xlsx adalah arsip ZIP berisi beberapa berkas XML. Menulisnya sendiri
+   jauh lebih ringan daripada menambah pustaka spreadsheet, dan tetap dibuka
+   normal oleh Excel, LibreOffice, maupun Google Sheets. Entri ZIP disimpan
+   tanpa kompresi (metode "store") supaya tidak perlu penyusut data. */
+var CRC_TABEL = (function(){
+  var t = new Uint32Array(256), c, n, k;
+  for(n = 0; n < 256; n++){
+    c = n;
+    for(k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+function crc32(b){
+  var c = 0xFFFFFFFF;
+  for(var i = 0; i < b.length; i++) c = CRC_TABEL[(c ^ b[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+function keUtf8(s){ return new TextEncoder().encode(s); }
+function u16(n){ return [n & 255, (n >>> 8) & 255]; }
+function u32(n){ return [n & 255, (n >>> 8) & 255, (n >>> 16) & 255, (n >>> 24) & 255]; }
+
+function zipSimpan(daftar){
+  var potong = [], pusat = [], geser = 0, TGL = 33;   // 33 = 1 Januari 1980
+  daftar.forEach(function(f){
+    var nama = keUtf8(f.nama), c = crc32(f.data), n = f.data.length;
+    var kepala = [].concat([0x50,0x4b,0x03,0x04], u16(20), u16(0), u16(0), u16(0), u16(TGL),
+                           u32(c), u32(n), u32(n), u16(nama.length), u16(0));
+    potong.push(new Uint8Array(kepala), nama, f.data);
+    pusat.push({nama:nama, crc:c, n:n, geser:geser});
+    geser += kepala.length + nama.length + n;
+  });
+  var mulaiPusat = geser, isiPusat = [];
+  pusat.forEach(function(p){
+    var h = [].concat([0x50,0x4b,0x01,0x02], u16(20), u16(20), u16(0), u16(0), u16(0), u16(TGL),
+                      u32(p.crc), u32(p.n), u32(p.n), u16(p.nama.length),
+                      u16(0), u16(0), u16(0), u16(0), u32(0), u32(p.geser));
+    isiPusat.push(new Uint8Array(h), p.nama);
+    geser += h.length + p.nama.length;
+  });
+  var tutup = new Uint8Array([].concat([0x50,0x4b,0x05,0x06], u16(0), u16(0),
+                             u16(pusat.length), u16(pusat.length),
+                             u32(geser - mulaiPusat), u32(mulaiPusat), u16(0)));
+  return new Blob(potong.concat(isiPusat, [tutup]),
+                  {type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+}
+
+function xmlEsc(s){
+  return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&apos;"}[c];
+  });
+}
+function hurufKolom(i){
+  var s = "", n = i + 1;
+  while(n > 0){ var r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = Math.floor((n - 1) / 26); }
+  return s;
+}
+function lembarXML(l){
+  var baris = l.baris, lebarKolom = 0;
+  baris.forEach(function(b){ if(b.length > lebarKolom) lebarKolom = b.length; });
+  var isi = baris.map(function(b, r){
+    var sel = b.map(function(v, c){
+      var ref = hurufKolom(c) + (r + 1), gaya = (r === 0) ? ' s="1"' : '';
+      if(typeof v === "number" && isFinite(v))
+        return '<c r="' + ref + '"' + gaya + '><v>' + v + '</v></c>';
+      var t = (v == null) ? "" : String(v);
+      if(!t) return '<c r="' + ref + '"' + gaya + '/>';
+      return '<c r="' + ref + '"' + gaya + ' t="inlineStr"><is><t xml:space="preserve">' +
+             xmlEsc(t) + '</t></is></c>';
+    }).join("");
+    return '<row r="' + (r + 1) + '">' + sel + '</row>';
+  }).join("");
+  var kolom = (l.lebar || []).map(function(w, i){
+    return '<col min="' + (i + 1) + '" max="' + (i + 1) + '" width="' + w + '" customWidth="1"/>';
+  }).join("");
+  var akhir = hurufKolom(Math.max(0, lebarKolom - 1)) + Math.max(1, baris.length);
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+      '<dimension ref="A1:' + akhir + '"/>' +
+      '<sheetViews><sheetView workbookViewId="0">' +
+        '<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>' +
+      '</sheetView></sheetViews>' +
+      (kolom ? '<cols>' + kolom + '</cols>' : '') +
+      '<sheetData>' + isi + '</sheetData>' +
+      '<autoFilter ref="A1:' + akhir + '"/>' +
+    '</worksheet>';
+}
+function bukuXLSX(lembar){
+  var GAYA = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+    '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font>' +
+    '<font><b/><sz val="11"/><name val="Calibri"/></font></fonts>' +
+    '<fills count="2"><fill><patternFill patternType="none"/></fill>' +
+    '<fill><patternFill patternType="gray125"/></fill></fills>' +
+    '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>' +
+    '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
+    '<cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
+    '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs>' +
+    '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>' +
+    '</styleSheet>';
+
+  var NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+  var daftarSheet = lembar.map(function(l, i){
+    return '<sheet name="' + xmlEsc(l.nama) + '" sheetId="' + (i + 1) + '" r:id="rId' + (i + 1) + '"/>';
+  }).join("");
+  var relSheet = lembar.map(function(l, i){
+    return '<Relationship Id="rId' + (i + 1) + '" Type="' + NS + '/worksheet" Target="worksheets/sheet' + (i + 1) + '.xml"/>';
+  }).join("");
+  var jenisSheet = lembar.map(function(l, i){
+    return '<Override PartName="/xl/worksheets/sheet' + (i + 1) + '.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>';
+  }).join("");
+
+  var berkas = [
+    {nama:"[Content_Types].xml", teks:
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Default Extension="xml" ContentType="application/xml"/>' +
+      '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
+      jenisSheet +
+      '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' +
+      '</Types>'},
+    {nama:"_rels/.rels", teks:
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="' + NS + '/officeDocument" Target="xl/workbook.xml"/>' +
+      '</Relationships>'},
+    {nama:"xl/workbook.xml", teks:
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="' + NS + '">' +
+      '<sheets>' + daftarSheet + '</sheets></workbook>'},
+    {nama:"xl/_rels/workbook.xml.rels", teks:
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      relSheet +
+      '<Relationship Id="rId' + (lembar.length + 1) + '" Type="' + NS + '/styles" Target="styles.xml"/>' +
+      '</Relationships>'},
+    {nama:"xl/styles.xml", teks: GAYA}
+  ];
+  lembar.forEach(function(l, i){
+    berkas.push({nama:"xl/worksheets/sheet" + (i + 1) + ".xml", teks: lembarXML(l)});
+  });
+  return zipSimpan(berkas.map(function(f){ return {nama:f.nama, data:keUtf8(f.teks)}; }));
+}
+
+/* Satu sumber baris untuk CSV maupun Excel, supaya isinya tidak pernah berbeda. */
+var KEPALA_REKAP = ["Tanggal","Kode","Nama","Kelas / Divisi","Jam Masuk","Jam Pulang","Status"];
+function barisRekap(iso){
+  var cat = hariRec(iso);
+  return daftarPeserta().map(function(p){
+    var c = cat[p.kode] || {};
+    var st = c.masuk ? (c.status === "terlambat" ? "Terlambat" : "Hadir") : "Belum hadir";
+    return [iso, p.kode, p.nama, p.grup || "", c.masuk || "", c.pulang || "", st];
+  });
+}
+function rekapExcel(){
+  var iso = state.tglRekap, r = ringkas(iso);
+  unduh("absensi-" + iso + ".xlsx", bukuXLSX([
+    {
+      nama: "Rekap " + iso,
+      lebar: [12, 14, 26, 20, 12, 12, 14],
+      baris: [KEPALA_REKAP].concat(barisRekap(iso))
+    },
+    {
+      nama: "Ringkasan",
+      lebar: [26, 24],
+      baris: [
+        ["Keterangan", "Nilai"],
+        ["Tanggal", tglPanjang(iso)],
+        ["Peserta terdaftar", r.total],
+        ["Hadir", r.hadir],
+        ["Terlambat", r.telat],
+        ["Belum hadir", r.belum],
+        ["Batas jam masuk", state.pengaturan.jamMasuk],
+        ["Toleransi (menit)", Number(state.pengaturan.toleransi) || 0],
+        ["Diunduh", new Date().toLocaleString("id-ID")]
+      ]
+    }
+  ]));
+}
+
 function csvBaris(v){
   var s = String(v == null ? "" : v);
   return /[",;\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
@@ -11179,7 +11362,8 @@ function viewRekap(){
         '<label for="tglPilih" class="mini">Tanggal</label>' +
         '<input type="date" id="tglPilih" value="' + esc(iso) + '">' +
         '<span class="mini">' + tglPanjang(iso) + '</span>' +
-        '<button class="btn small push" data-act="csvRekap">Unduh rekap (CSV)</button>' +
+        '<button class="btn small push" data-act="xlsxRekap">Unduh Excel</button>' +
+        '<button class="btn small" data-act="csvRekap">Unduh CSV</button>' +
       '</div>' +
       '<div class="trend">' + trendSVG() + '</div>' +
     '</div>' +
@@ -11458,15 +11642,11 @@ document.addEventListener("click", function(ev){
     ).map(function(r){ return r.map(csvBaris).join(","); }).join("\r\n");
     unduh("peserta-presensia.csv", "﻿" + baris);
   }
+  else if(act === "xlsxRekap") rekapExcel();
   else if(act === "csvRekap"){
-    var iso = state.tglRekap, cat = hariRec(iso);
-    var isi = [["Tanggal","Kode","Nama","Kelas / divisi","Jam masuk","Jam pulang","Status"]].concat(
-      daftarPeserta().map(function(p){
-        var c = cat[p.kode] || {};
-        var st = c.masuk ? (c.status === "terlambat" ? "Terlambat" : "Hadir") : "Belum hadir";
-        return [iso, p.kode, p.nama, p.grup || "", c.masuk || "", c.pulang || "", st];
-      })
-    ).map(function(r){ return r.map(csvBaris).join(","); }).join("\r\n");
+    var iso = state.tglRekap;
+    var isi = [KEPALA_REKAP].concat(barisRekap(iso))
+      .map(function(r){ return r.map(csvBaris).join(","); }).join("\r\n");
     unduh("absensi-" + iso + ".csv", "﻿" + isi);
   }
 });

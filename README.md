@@ -1,7 +1,7 @@
 # Presensia — absensi kartu QR
 
 Aplikasi presensi berbasis pemindaian kode QR. Berjalan sepenuhnya di browser: pemindai
-QR, pembuat kartu QR, rekap harian, dan ekspor CSV.
+QR, pembuat kartu QR, rekap harian, dan ekspor Excel maupun CSV.
 
 **Halaman langsung:** <https://radja4100.github.io/Absensi-QR/>
 
@@ -13,8 +13,14 @@ QR, pembuat kartu QR, rekap harian, dan ekspor CSV.
 2. **Pindai** — pilih *Jam masuk* atau *Jam pulang*, nyalakan kamera, arahkan kartu.
    Alternatif tanpa kamera: unggah foto kartu QR, tempel tangkapan layar, seret berkas
    gambar, atau ketik kodenya langsung.
-3. **Rekap** — pilih tanggal, lihat grafik tujuh hari, tabel lengkap, dan unduh CSV
-   (memakai BOM UTF-8 sehingga rapi dibuka di Excel).
+3. **Rekap** — pilih tanggal, lihat grafik tujuh hari, tabel lengkap, lalu unduh
+   **Excel** atau **CSV**.
+
+   Berkas Excel (`.xlsx`) berisi dua lembar: *Rekap* dengan satu baris per peserta
+   (baris kepala dibekukan dan sudah berfilter otomatis, siap disortir atau di-pivot)
+   dan *Ringkasan* berisi jumlah hadir, terlambat, belum hadir, serta aturan jam yang
+   dipakai saat itu. Angka disimpan sebagai angka, bukan teks, jadi rumus langsung
+   bekerja. CSV memakai BOM UTF-8 supaya huruf beraksen tidak rusak di Excel.
 
 Status **hadir** atau **terlambat** dihitung dari aturan jam di tab Pindai
 (bawaan 07:30 dengan toleransi 10 menit).
@@ -108,6 +114,10 @@ kamera tetap ditolak, tombol **Pindai dari gambar** tetap bisa dipakai — di HP
 berkasnya juga menawarkan "Ambil Foto".
 
 ## Catatan teknis
+
+Ekspor `.xlsx` ditulis sendiri oleh aplikasi (sebuah berkas xlsx pada dasarnya adalah
+arsip ZIP berisi XML), jadi tidak ada pustaka spreadsheet yang perlu diunduh. Hasilnya
+diuji terbuka bersih oleh openpyxl tanpa peringatan.
 
 Semua pustaka disimpan di dalam repositori, tidak ada satu pun permintaan ke CDN:
 [jsQR](https://github.com/cozmo/jsQR) (MIT) dan
