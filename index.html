@@ -11176,7 +11176,9 @@ async function siapkanPenyimpanan(){
     if(window.claude && typeof claude.use === "function") d = await claude.use("db");
   }catch(e){ d = null; }
   if(d){
-    db = d; state.storage = "server"; chipSimpan(); pasangSnapshot();
+    db = d; state.storage = "server";
+    state.penilai = true;          // artefak pribadi: tidak ada tingkatan akun
+    chipSimpan(); pasangSnapshot();
   }else if(firebaseSiap()){
     await mulaiFirebase();
   }else{
@@ -12250,6 +12252,11 @@ function viewPengaturan(){
         '<div class="row-f"><label>Peserta terdaftar</label><span class="nilai">' + daftarPeserta().length + '</span></div>' +
         '<div class="row-f"><label>Hari absensi tercatat</label><span class="nilai">' + jumlahHari() + '</span></div>' +
         '<div class="row-f"><label>Penyimpanan</label><span class="nilai">' + esc(simpanTeks) + '</span></div>' +
+        '<div class="row-f"><div><label>Akses evaluasi staff</label>' +
+          (state.penilai ? '' :
+            '<p class="hint m0">Belum terbuka. Pada Firebase, buat dokumen ' +
+            '<b>pengguna/&lt;email Anda&gt;</b> dengan kolom <b>penilai</b> bernilai <b>true</b>.</p>') +
+          '</div><span class="nilai">' + (state.penilai ? "terbuka" : "tertutup") + '</span></div>' +
         (state.storage === "lokal"
           ? '<div class="row-f"><div><label>Hapus data di perangkat ini</label>' +
               '<p class="hint m0">Menghapus seluruh peserta dan absensi yang tersimpan di browser ini. Tidak dapat dibatalkan — cadangkan dulu.</p></div>' +
