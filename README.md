@@ -5,8 +5,6 @@ Absensi kartu QR untuk INAGA PEM Akamigas Student Chapter.
 Berjalan sepenuhnya di browser: pemindai QR, pembuat kartu QR, rekap harian, dan ekspor
 Excel maupun CSV.
 
-**Halaman langsung:** <https://radja4100.github.io/Absensi-QR/>
-
 ## Pakai
 
 1. **Peserta** — tambah nama, kode/NIS, dan kelas atau divisi. Setiap peserta punya
