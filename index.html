@@ -11171,6 +11171,17 @@ function crc32(b){
   return (c ^ 0xFFFFFFFF) >>> 0;
 }
 function keUtf8(s){ return new TextEncoder().encode(s); }
+function dariBase64(b64){
+  var bin = atob(b64), n = bin.length, u = new Uint8Array(n);
+  for(var i = 0; i < n; i++) u[i] = bin.charCodeAt(i);
+  return u;
+}
+function pngKodeQR(nilai, ukuran){
+  var cv = document.createElement("canvas");
+  new QRious({element:cv, value:nilai, size:ukuran, level:"M", padding:6,
+              background:"#ffffff", foreground:"#000000"});
+  return dariBase64(cv.toDataURL("image/png").split(",")[1]);
+}
 function u16(n){ return [n & 255, (n >>> 8) & 255]; }
 function u32(n){ return [n & 255, (n >>> 8) & 255, (n >>> 16) & 255, (n >>> 24) & 255]; }
 
@@ -11222,14 +11233,17 @@ function lembarXML(l){
       return '<c r="' + ref + '"' + gaya + ' t="inlineStr"><is><t xml:space="preserve">' +
              xmlEsc(t) + '</t></is></c>';
     }).join("");
-    return '<row r="' + (r + 1) + '">' + sel + '</row>';
+    var tinggi = (l.tinggiBaris && r > 0) ? ' ht="' + l.tinggiBaris + '" customHeight="1"' : '';
+    return '<row r="' + (r + 1) + '"' + tinggi + '>' + sel + '</row>';
   }).join("");
   var kolom = (l.lebar || []).map(function(w, i){
     return '<col min="' + (i + 1) + '" max="' + (i + 1) + '" width="' + w + '" customWidth="1"/>';
   }).join("");
   var akhir = hurufKolom(Math.max(0, lebarKolom - 1)) + Math.max(1, baris.length);
+  var gambar = l.gambar && l.gambar.length ? '<drawing r:id="rIdGbr"/>' : '';
+  var ruangR = gambar ? ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"' : '';
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"' + ruangR + '>' +
       '<dimension ref="A1:' + akhir + '"/>' +
       '<sheetViews><sheetView workbookViewId="0">' +
         '<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>' +
@@ -11237,8 +11251,33 @@ function lembarXML(l){
       (kolom ? '<cols>' + kolom + '</cols>' : '') +
       '<sheetData>' + isi + '</sheetData>' +
       '<autoFilter ref="A1:' + akhir + '"/>' +
+      gambar +
     '</worksheet>';
 }
+var EMU = 9525;   // 1 piksel pada 96 dpi
+function gambarXML(daftar){
+  var isi = daftar.map(function(g, i){
+    var sisi = Math.round(g.px * EMU);
+    return '<xdr:oneCellAnchor>' +
+      '<xdr:from><xdr:col>' + g.kolom + '</xdr:col><xdr:colOff>' + Math.round(3 * EMU) + '</xdr:colOff>' +
+      '<xdr:row>' + g.baris + '</xdr:row><xdr:rowOff>' + Math.round(3 * EMU) + '</xdr:rowOff></xdr:from>' +
+      '<xdr:ext cx="' + sisi + '" cy="' + sisi + '"/>' +
+      '<xdr:pic>' +
+        '<xdr:nvPicPr><xdr:cNvPr id="' + (i + 2) + '" name="' + xmlEsc(g.nama || ("Gambar " + (i + 1))) + '"/>' +
+        '<xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr>' +
+        '<xdr:blipFill><a:blip r:embed="rIdG' + (i + 1) + '"/>' +
+        '<a:stretch><a:fillRect/></a:stretch></xdr:blipFill>' +
+        '<xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="' + sisi + '" cy="' + sisi + '"/></a:xfrm>' +
+        '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr>' +
+      '</xdr:pic><xdr:clientData/></xdr:oneCellAnchor>';
+  }).join("");
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"' +
+    ' xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"' +
+    ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+    isi + '</xdr:wsDr>';
+}
+
 function bukuXLSX(lembar){
   var GAYA = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
@@ -11263,6 +11302,13 @@ function bukuXLSX(lembar){
   var jenisSheet = lembar.map(function(l, i){
     return '<Override PartName="/xl/worksheets/sheet' + (i + 1) + '.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>';
   }).join("");
+  var adaGambar = lembar.some(function(l){ return l.gambar && l.gambar.length; });
+  var jenisGambar = (adaGambar ? '<Default Extension="png" ContentType="image/png"/>' : '') +
+    lembar.map(function(l, i){
+      return (l.gambar && l.gambar.length)
+        ? '<Override PartName="/xl/drawings/drawing' + (i + 1) + '.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>'
+        : '';
+    }).join("");
 
   var berkas = [
     {nama:"[Content_Types].xml", teks:
@@ -11271,7 +11317,7 @@ function bukuXLSX(lembar){
       '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
       '<Default Extension="xml" ContentType="application/xml"/>' +
       '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
-      jenisSheet +
+      jenisSheet + jenisGambar +
       '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' +
       '</Types>'},
     {nama:"_rels/.rels", teks:
@@ -11294,7 +11340,32 @@ function bukuXLSX(lembar){
   lembar.forEach(function(l, i){
     berkas.push({nama:"xl/worksheets/sheet" + (i + 1) + ".xml", teks: lembarXML(l)});
   });
-  return zipSimpan(berkas.map(function(f){ return {nama:f.nama, data:keUtf8(f.teks)}; }));
+
+  // bagian biner: gambar QR beserta berkas drawing dan relasinya
+  var biner = [];
+  lembar.forEach(function(l, i){
+    if(!l.gambar || !l.gambar.length) return;
+    var n = i + 1, relG = [];
+    l.gambar.forEach(function(g, j){
+      var berkasGbr = "image_s" + n + "_" + (j + 1) + ".png";
+      biner.push({nama: "xl/media/" + berkasGbr, data: g.data});
+      relG.push('<Relationship Id="rIdG' + (j + 1) + '" Type="' + NS + '/image" Target="../media/' + berkasGbr + '"/>');
+    });
+    berkas.push({nama:"xl/drawings/drawing" + n + ".xml", teks: gambarXML(l.gambar)});
+    berkas.push({nama:"xl/drawings/_rels/drawing" + n + ".xml.rels", teks:
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      relG.join("") + '</Relationships>'});
+    berkas.push({nama:"xl/worksheets/_rels/sheet" + n + ".xml.rels", teks:
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rIdGbr" Type="' + NS + '/drawing" Target="../drawings/drawing' + n + '.xml"/>' +
+      '</Relationships>'});
+  });
+
+  return zipSimpan(
+    berkas.map(function(f){ return {nama:f.nama, data:keUtf8(f.teks)}; }).concat(biner)
+  );
 }
 
 /* Satu sumber baris untuk CSV maupun Excel, supaya isinya tidak pernah berbeda. */
@@ -11312,11 +11383,26 @@ function pesertaExcel(){
     hitung[g] = (hitung[g] || 0) + 1;
   });
   var perGrup = Object.keys(hitung).sort(bandingAlami).map(function(g){ return [g, hitung[g]]; });
+
+  // Gambar kartu QR ditanam di kolom E. Dibuat pada 264 px lalu ditampilkan 88 px
+  // supaya tetap tajam saat lembarnya dicetak.
+  var adaQR = (typeof window.QRious === "function");
+  var gambar = adaQR ? daftarPeserta().map(function(p, i){
+    return {
+      kolom: 4, baris: i + 1, px: 88,
+      nama: "QR " + p.kode,
+      data: pngKodeQR("PRESENSI:" + p.kode, 264)
+    };
+  }) : [];
+
   unduh("peserta-" + tglISO() + ".xlsx", bukuXLSX([
     {
       nama: "Peserta",
-      lebar: [14, 26, 22, 26],
-      baris: [KEPALA_PESERTA].concat(barisPeserta())
+      lebar: [14, 26, 22, 26, 14],
+      tinggiBaris: 70,
+      gambar: gambar,
+      baris: [KEPALA_PESERTA.concat(["Kartu QR"])].concat(
+        barisPeserta().map(function(b){ return b.concat([""]); }))
     },
     {
       nama: "Per Kelas",
