@@ -29,4 +29,4 @@ window.FIREBASE_CONFIG = {
  * PENTING: jangan aktifkan penegakan (Enforce) di Console sebelum nilai ini
  * terisi dan halaman sudah diuji, karena permintaan tanpa token akan ditolak.
  */
-window.APPCHECK_SITE_KEY = "";
+window.APPCHECK_SITE_KEY = "6LdEeagtAAAAAFwMXoTyERZ0MI_BsBfZAv2aXhGh";
