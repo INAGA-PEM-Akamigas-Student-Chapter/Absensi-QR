@@ -10691,7 +10691,8 @@ var state = {
   tampilan: {tema:"otomatis", suara:true},
   batasHari: 60,                     // berapa hari riwayat yang dimuat dari server
   evaluasi: [],                      // {id, kode, tanggal, nilai, catatan, dibuat}
-  penilai: false,                    // akun ini boleh membuka bagian Evaluasi
+  penilai: false,                    // boleh membuka bagian Evaluasi
+  kelola: false,                     // boleh mengubah peserta dan aturan jam
   bukaEval: null,                    // kode peserta yang sedang dilihat riwayatnya
   bagian: "absensi",                 // "absensi" atau "evaluasi"
   kameraPesan: "",
@@ -10756,6 +10757,8 @@ async function hapusEvaluasi(id){
 }
 /* Divisi seperti "Staff of Professionalism" langsung dikenali sebagai staff.
    Centang manual tetap ada untuk jabatan yang tidak memakai penamaan itu. */
+function bolehKelola(){ return state.kelola; }
+
 function apakahStaff(p){
   return !!p.staff || /^\s*staff\b/i.test(String(p.grup || ""));
 }
@@ -10998,7 +11001,7 @@ function mulaiFirebase(){
       }else{
         state.storage = "lokal";
         state.peserta = []; state.hari = {}; state.demo = true;
-        state.evaluasi = []; state.penilai = false;
+        state.evaluasi = []; state.penilai = false; state.kelola = false;
       }
       chipSimpan(); gambarUlang();
       if(pertama){ pertama = false; res(true); }
@@ -11057,9 +11060,11 @@ function pasangSnapshotFB(){
 
   // Peran hanya menentukan apa yang tampil; penegakan sebenarnya ada di aturan Firestore.
   fbLepas.push(fb.doc("pengguna/" + (fbUser && fbUser.email)).onSnapshot(function(snap){
-    state.penilai = !!(snap.exists && (snap.data() || {}).penilai);
+    var v = (snap.exists && snap.data()) || {};
+    state.penilai = v.penilai === true;
+    state.kelola  = v.kelola === true;
     gambarUlang();
-  }, function(){ state.penilai = false; gambarUlang(); }));
+  }, function(){ state.penilai = false; state.kelola = false; gambarUlang(); }));
 
   fbLepas.push(fb.doc("pengaturan/umum").onSnapshot(function(snap){
     if(snap.exists){
@@ -11183,7 +11188,7 @@ async function siapkanPenyimpanan(){
   }catch(e){ d = null; }
   if(d){
     db = d; state.storage = "server";
-    state.penilai = true;          // artefak pribadi: tidak ada tingkatan akun
+    state.penilai = true; state.kelola = true;   // artefak pribadi: tidak ada tingkatan akun
     chipSimpan(); pasangSnapshot();
   }else if(firebaseSiap()){
     await mulaiFirebase();
@@ -11197,7 +11202,7 @@ async function siapkanPenyimpanan(){
       state.demo = false;
     }
     state.evaluasi = bacaEvalLokal();
-    state.penilai = true;          // tanpa akun, tidak ada yang perlu dibatasi
+    state.penilai = true; state.kelola = true;   // tanpa akun, tidak ada yang perlu dibatasi
     gambarUlang();
   }
   try{
@@ -12071,12 +12076,15 @@ function viewScan(){
         '<div class="card-head"><h2>Aturan jam</h2>' +
           '<span class="note">terlambat setelah ' + esc(batasTerlambat()) + '</span></div>' +
         '<div class="card-pad rows">' +
-          '<div class="row-f"><label for="jamMasuk">Jam masuk</label>' +
-            '<input id="jamMasuk" type="time" value="' + esc(state.pengaturan.jamMasuk) + '"></div>' +
-          '<div class="row-f"><label for="toleransi">Toleransi (menit)</label>' +
-            '<input id="toleransi" type="number" min="0" max="120" value="' + esc(state.pengaturan.toleransi) + '"></div>' +
+          (bolehKelola()
+            ? '<div class="row-f"><label for="jamMasuk">Jam masuk</label>' +
+                '<input id="jamMasuk" type="time" value="' + esc(state.pengaturan.jamMasuk) + '"></div>' +
+              '<div class="row-f"><label for="toleransi">Toleransi (menit)</label>' +
+                '<input id="toleransi" type="number" min="0" max="120" value="' + esc(state.pengaturan.toleransi) + '"></div>'
+            : '<div class="row-f"><label>Jam masuk</label><span class="nilai">' + esc(state.pengaturan.jamMasuk) + '</span></div>' +
+              '<div class="row-f"><label>Toleransi</label><span class="nilai">' + esc(state.pengaturan.toleransi) + ' menit</span></div>') +
           '<p class="hint">Pindaian setelah pukul ' + esc(batasTerlambat()) +
-            ' dicatat sebagai terlambat.</p>' +
+            ' dicatat sebagai terlambat.' + (bolehKelola() ? '' : ' Hanya akun pengelola yang dapat mengubahnya.') + '</p>' +
         '</div>' +
       '</div>' +
     '</div>' +
@@ -12111,14 +12119,17 @@ function viewPeserta(){
         '<button class="btn small" data-act="qr" data-kode="' + esc(p.kode) +
           '" title="Kartu QR" aria-label="Kartu QR ' + esc(p.nama) + '">' + IKON.qr +
           '<span class="teks-aksi">Kartu QR</span></button> ' +
-        '<button class="btn small danger" data-act="hapus" data-kode="' + esc(p.kode) +
-          '" title="Hapus" aria-label="Hapus ' + esc(p.nama) + '">' + IKON.hapus +
-          '<span class="teks-aksi">Hapus</span></button>' +
+        (bolehKelola()
+          ? '<button class="btn small danger" data-act="hapus" data-kode="' + esc(p.kode) +
+            '" title="Hapus" aria-label="Hapus ' + esc(p.nama) + '">' + IKON.hapus +
+            '<span class="teks-aksi">Hapus</span></button>'
+          : '') +
       '</td></tr>';
   }).join("");
 
   return '' +
   '<div class="col">' +
+    (bolehKelola() ?
     '<div class="card">' +
       '<div class="card-head"><h2>Tambah peserta</h2>' +
         '<span class="note">Divisi berawalan “Staff” otomatis ikut dievaluasi</span></div>' +
@@ -12136,7 +12147,9 @@ function viewPeserta(){
           '<button class="btn primary" type="submit">' + IKON.tambah + 'Tambah</button>' +
         '</form>' +
       '</div>' +
-    '</div>' +
+    '</div>'
+    : '<div class="card card-pad"><p class="hint m0">Akun ini hanya dapat melihat daftar peserta. ' +
+      'Penambahan, perubahan, dan penghapusan dilakukan oleh akun pengelola.</p></div>') +
     '<div class="card">' +
       '<div class="card-head"><h2>Daftar peserta</h2>' +
         '<span class="note">' + ps.length + ' orang</span>' +
@@ -12258,10 +12271,15 @@ function viewPengaturan(){
         '<div class="row-f"><label>Peserta terdaftar</label><span class="nilai">' + daftarPeserta().length + '</span></div>' +
         '<div class="row-f"><label>Hari absensi tercatat</label><span class="nilai">' + jumlahHari() + '</span></div>' +
         '<div class="row-f"><label>Penyimpanan</label><span class="nilai">' + esc(simpanTeks) + '</span></div>' +
+        '<div class="row-f"><div><label>Kelola peserta &amp; aturan jam</label>' +
+          (bolehKelola() ? '' :
+            '<p class="hint m0">Tertutup. Pada Firebase, tambahkan kolom <b>kelola</b> bernilai ' +
+            '<b>true</b> pada dokumen <b>pengguna/&lt;email Anda&gt;</b>.</p>') +
+          '</div><span class="nilai">' + (bolehKelola() ? "terbuka" : "tertutup") + '</span></div>' +
         '<div class="row-f"><div><label>Akses evaluasi staff</label>' +
           (state.penilai ? '' :
-            '<p class="hint m0">Belum terbuka. Pada Firebase, buat dokumen ' +
-            '<b>pengguna/&lt;email Anda&gt;</b> dengan kolom <b>penilai</b> bernilai <b>true</b>.</p>') +
+            '<p class="hint m0">Tertutup. Pada Firebase, tambahkan kolom <b>penilai</b> bernilai ' +
+            '<b>true</b> pada dokumen <b>pengguna/&lt;email Anda&gt;</b>.</p>') +
           '</div><span class="nilai">' + (state.penilai ? "terbuka" : "tertutup") + '</span></div>' +
         (state.storage === "lokal"
           ? '<div class="row-f"><div><label>Hapus data di perangkat ini</label>' +
