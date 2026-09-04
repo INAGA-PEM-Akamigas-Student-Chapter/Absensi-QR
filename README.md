@@ -1,4 +1,4 @@
-# Presensia — absensi kartu QR
+# Presensi — absensi kartu QR
 
 Aplikasi presensi berbasis pemindaian kode QR. Berjalan sepenuhnya di browser: pemindai
 QR, pembuat kartu QR, rekap harian, dan ekspor Excel maupun CSV.
@@ -9,7 +9,7 @@ QR, pembuat kartu QR, rekap harian, dan ekspor Excel maupun CSV.
 
 1. **Peserta** — tambah nama, kode/NIS, dan kelas atau divisi. Setiap peserta punya
    tombol **Kartu QR**; unduh PNG-nya lalu cetak sebagai kartu. Isi QR berformat
-   `PRESENSIA:<kode>`.
+   `PRESENSI:<kode>` (kartu lama berawalan `PRESENSIA:` tetap terbaca).
 2. **Pindai** — pilih *Jam masuk* atau *Jam pulang*, nyalakan kamera, arahkan kartu.
    Alternatif tanpa kamera: unggah foto kartu QR, tempel tangkapan layar, seret berkas
    gambar, atau ketik kodenya langsung.

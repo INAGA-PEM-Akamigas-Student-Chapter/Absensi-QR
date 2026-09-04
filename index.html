@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>Presensia QR</title>
+<title>Presensi QR</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Sans+3:wght@400;500;600&display=swap">
@@ -10371,7 +10371,7 @@ img{max-width:100%}
     <div class="brand">
       <div class="stamp">PR</div>
       <div>
-        <h1>Presensia</h1>
+        <h1>Presensi</h1>
         <div class="sub">Presensi kartu QR</div>
       </div>
     </div>
@@ -10614,7 +10614,7 @@ function adaDataLokal(){
 function cadangkanLokal(){
   var l = bacaLokal();
   if(!l || !l.peserta || !l.peserta.length){ toast("warn", "Tidak ada data lama", ""); return; }
-  unduh("presensia-data-lama-" + tglISO() + ".json", JSON.stringify({
+  unduh("presensi-data-lama-" + tglISO() + ".json", JSON.stringify({
     aplikasi: "presensia", versi: 1, dibuat: new Date().toISOString(),
     peserta: l.peserta, hari: l.hari || {}, pengaturan: l.pengaturan || state.pengaturan
   }, null, 2));
@@ -10918,7 +10918,7 @@ function putar(){
 
 function normalisasi(teks){
   var t = String(teks).trim();
-  var m = t.match(/^PRESENSIA:(.+)$/i);
+  var m = t.match(/^PRESENSI[A]?:(.+)$/i);   // terima PRESENSI: maupun PRESENSIA: (kartu lama)
   return (m ? m[1] : t).trim();
 }
 function proses(teks){
@@ -11212,9 +11212,7 @@ function renderMasuk(){
     '<div class="gerbang">' +
       '<form class="sheet masuk" id="formMasuk">' +
         '<div class="stamp besar">PR</div>' +
-        '<h2>Masuk ke Presensia</h2>' +
-        '<p class="hint">Data absensi tersimpan di Firebase dan tersinkron antar-perangkat. ' +
-          'Gunakan akun yang dibuat di Firebase Console.</p>' +
+        '<h2>Masuk ke Presensi</h2>' +
         '<div class="field"><label for="mEmail">Email</label>' +
           '<input id="mEmail" type="email" autocomplete="username" required></div>' +
         '<div class="field"><label for="mSandi">Kata sandi</label>' +
@@ -11506,7 +11504,7 @@ function cadangkan(){
     hari: state.demo ? state.contohHari : state.hari,
     pengaturan: state.pengaturan
   }, null, 2);
-  unduh("presensia-cadangan-" + tglISO() + ".json", isi);
+  unduh("presensi-cadangan-" + tglISO() + ".json", isi);
 }
 async function pulihkan(file){
   var teks;
@@ -11609,7 +11607,7 @@ function gambarQR(p){
   }
   try{
     new QRious({
-      element: $("#qrCanvas"), value: "PRESENSIA:" + p.kode,
+      element: $("#qrCanvas"), value: "PRESENSI:" + p.kode,
       size: 460, level: "H", padding: 18, background: "#ffffff", foreground: "#101a17"
     });
   }catch(e){
@@ -11626,7 +11624,7 @@ function sebabPustaka(){
   if(!document.querySelector("script[src]"))
     return "Berkas halaman ini tampaknya terpotong saat disalin. Salin ulang berkasnya secara utuh.";
   if(location.protocol === "file:")
-    return "Folder lib/ harus berada di sebelah berkas ini. Kalau ingin satu berkas saja, pakai presensia-mandiri.html yang sudah memuat semua pustakanya.";
+    return "Folder lib/ harus berada di sebelah berkas ini. Kalau ingin satu berkas saja, pakai presensi-mandiri.html yang sudah memuat semua pustakanya.";
   return "Pemuatan skrip tertahan — biasanya oleh jaringan, pemblokir iklan, atau ekstensi privasi. Muat ulang halaman, matikan pemblokir untuk halaman ini, atau coba jaringan lain.";
 }
 function tutupModal(){ $("#modalHost").innerHTML = ""; }
@@ -11676,9 +11674,9 @@ document.addEventListener("click", function(ev){
   }
   else if(act === "csvPeserta"){
     var baris = [["Kode","Nama","Kelas / divisi","Isi QR"]].concat(
-      daftarPeserta().map(function(p){ return [p.kode, p.nama, p.grup || "", "PRESENSIA:" + p.kode]; })
+      daftarPeserta().map(function(p){ return [p.kode, p.nama, p.grup || "", "PRESENSI:" + p.kode]; })
     ).map(function(r){ return r.map(csvBaris).join(","); }).join("\r\n");
-    unduh("peserta-presensia.csv", "﻿" + baris);
+    unduh("peserta-presensi.csv", "﻿" + baris);
   }
   else if(act === "xlsxRekap") rekapExcel();
   else if(act === "csvRekap"){
