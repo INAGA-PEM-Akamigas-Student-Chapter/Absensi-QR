@@ -10422,6 +10422,10 @@ tbody tr{transition:background .12s}
   .stat .v{font-size:24px}
 }
 
+.th-urut{cursor:pointer; user-select:none; transition:color .12s}
+.th-urut:hover{color:var(--ink)}
+.th-urut[aria-sort]{color:var(--accent)}
+.th-urut .panah{display:inline-block; width:11px; margin-left:3px; font-size:11px}
 td.nm{white-space:nowrap}
 .sub-grup{display:none}
 .teks-aksi{display:inline}
@@ -10539,14 +10543,28 @@ var state = {
   peserta:[], hari:{}, log:[],
   pengaturan:{jamMasuk:"07:30", toleransi:10},
   tglRekap: tglISO(),
+  urutPeserta: {kolom:"kode", arah:"asc"},
+  urutRekap:   {kolom:"kode", arah:"asc"},
   kameraPesan: "",
   contohHari: contohHari()
 };
 
 /* ---------- akses data ---------- */
+/* localeCompare dengan numeric:true membuat "2" mendahului "10",
+   dan tetap benar untuk kode bercampur huruf seperti "2024-001". */
+function bandingAlami(a, b){
+  return String(a == null ? "" : a).localeCompare(String(b == null ? "" : b),
+         "id", {numeric:true, sensitivity:"base"});
+}
 function daftarPeserta(){
   var arr = state.demo ? CONTOH_PESERTA.slice() : state.peserta.slice();
-  return arr.sort(function(a,b){ return a.nama.localeCompare(b.nama,"id"); });
+  var u = state.urutPeserta, arah = (u.arah === "desc") ? -1 : 1;
+  arr.sort(function(a, b){
+    var c = bandingAlami(a[u.kolom], b[u.kolom]);
+    if(c === 0) c = bandingAlami(a.kode, b.kode);     // pemecah seri yang tetap
+    return c * arah;
+  });
+  return arr;
 }
 function hariRec(iso){
   var src = state.demo ? state.contohHari : state.hari;
@@ -11281,13 +11299,50 @@ function bukuXLSX(lembar){
 
 /* Satu sumber baris untuk CSV maupun Excel, supaya isinya tidak pernah berbeda. */
 var KEPALA_REKAP = ["Tanggal","Kode","Nama","Kelas / Divisi","Jam Masuk","Jam Pulang","Status"];
+/* Urutan status yang bermakna, bukan alfabet: hadir, terlambat, lalu belum. */
+var PERINGKAT_STATUS = {"Hadir":0, "Terlambat":1, "Belum hadir":2};
+var KOLOM_REKAP = {kode:1, nama:2, grup:3, masuk:4, pulang:5, status:6};
+
+function urutkanRekap(baris){
+  var u = state.urutRekap, i = KOLOM_REKAP[u.kolom], arah = (u.arah === "desc") ? -1 : 1;
+  if(i == null) return baris;
+  return baris.slice().sort(function(a, b){
+    var x = a[i], y = b[i], c;
+    if(u.kolom === "status"){
+      c = (PERINGKAT_STATUS[x] == null ? 9 : PERINGKAT_STATUS[x]) -
+          (PERINGKAT_STATUS[y] == null ? 9 : PERINGKAT_STATUS[y]);
+    }else if(u.kolom === "masuk" || u.kolom === "pulang"){
+      // yang belum terisi selalu di bawah, ke arah mana pun diurutkan
+      if(!x && !y) c = 0;
+      else if(!x) return 1;
+      else if(!y) return -1;
+      else c = bandingAlami(x, y);
+    }else{
+      c = bandingAlami(x, y);
+    }
+    if(c === 0) c = bandingAlami(a[1], b[1]);
+    return c * arah;
+  });
+}
+
+/* Kepala kolom yang bisa diklik untuk mengurutkan. */
+function th(label, kolom, kelas){
+  var u = (state.tab === "rekap") ? state.urutRekap : state.urutPeserta;
+  var aktif = u.kolom === kolom;
+  var arah = aktif ? (u.arah === "desc" ? "descending" : "ascending") : null;
+  return '<th class="th-urut' + (kelas ? " " + kelas : "") + '"' +
+         ' data-urut="' + kolom + '"' + (arah ? ' aria-sort="' + arah + '"' : "") +
+         ' title="Urutkan menurut ' + esc(label) + '" tabindex="0" role="button">' +
+         esc(label) + '<span class="panah">' + (aktif ? (u.arah === "desc" ? "↓" : "↑") : "") + '</span></th>';
+}
+
 function barisRekap(iso){
   var cat = hariRec(iso);
-  return daftarPeserta().map(function(p){
+  return urutkanRekap(daftarPeserta().map(function(p){
     var c = cat[p.kode] || {};
     var st = c.masuk ? (c.status === "terlambat" ? "Terlambat" : "Hadir") : "Belum hadir";
     return [iso, p.kode, p.nama, p.grup || "", c.masuk || "", c.pulang || "", st];
-  });
+  }));
 }
 function rekapExcel(){
   var iso = state.tglRekap, r = ringkas(iso);
@@ -11502,7 +11557,9 @@ function viewPeserta(){
         (ps.length ? ' <button class="btn small" data-act="csvPeserta">' + IKON.unduh + 'Unduh daftar (CSV)</button>' : '') +
       '</div>' +
       (ps.length
-        ? '<div class="tablewrap"><table><thead><tr><th>Kode</th><th>Nama</th><th class="kol-grup">Kelas / divisi</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>'
+        ? '<div class="tablewrap"><table><thead><tr>' +
+            th("Kode","kode") + th("Nama","nama") + th("Kelas / divisi","grup","kol-grup") +
+            '<th></th></tr></thead><tbody>' + rows + '</tbody></table></div>'
         : '<div class="empty">' + IKON.kosong + '<b>Belum ada peserta</b>' +
           '<span>Tambahkan lewat formulir di atas, lalu unduh dan cetak kartu QR-nya.</span></div>') +
     '</div>' +
@@ -11510,18 +11567,16 @@ function viewPeserta(){
 }
 
 function viewRekap(){
-  var iso = state.tglRekap, cat = hariRec(iso), ps = daftarPeserta(), r = ringkas(iso);
-  var rows = ps.map(function(p){
-    var c = cat[p.kode] || {};
-    var st = c.masuk ? (c.status || "hadir") : "belum";
-    var label = st === "hadir" ? "Hadir" : st === "terlambat" ? "Terlambat" : "Belum hadir";
-    return '<tr><td class="num">' + esc(p.kode) + '</td>' +
-      '<td class="nm">' + esc(p.nama) +
-        '<span class="sub-grup">' + esc(p.grup || "—") + '</span></td>' +
-      '<td class="mini kol-grup">' + esc(p.grup || "—") + '</td>' +
-      '<td class="num">' + esc(c.masuk || "—") + '</td>' +
-      '<td class="num">' + esc(c.pulang || "—") + '</td>' +
-      '<td><span class="pill ' + st + '">' + label + '</span></td></tr>';
+  var iso = state.tglRekap, ps = daftarPeserta(), r = ringkas(iso);
+  var KELAS = {"Hadir":"hadir", "Terlambat":"terlambat", "Belum hadir":"belum"};
+  var rows = barisRekap(iso).map(function(b){
+    return '<tr><td class="num">' + esc(b[1]) + '</td>' +
+      '<td class="nm">' + esc(b[2]) +
+        '<span class="sub-grup">' + esc(b[3] || "—") + '</span></td>' +
+      '<td class="mini kol-grup">' + esc(b[3] || "—") + '</td>' +
+      '<td class="num">' + esc(b[4] || "—") + '</td>' +
+      '<td class="num">' + esc(b[5] || "—") + '</td>' +
+      '<td><span class="pill ' + KELAS[b[6]] + '">' + esc(b[6]) + '</span></td></tr>';
   }).join("");
 
   return '' +
@@ -11546,7 +11601,10 @@ function viewRekap(){
     '<div class="card">' +
       '<div class="card-head"><h2>Daftar absensi</h2><span class="note">' + ps.length + ' peserta terdaftar</span></div>' +
       (ps.length
-        ? '<div class="tablewrap"><table><thead><tr><th>Kode</th><th>Nama</th><th class="kol-grup">Kelas / divisi</th><th>Masuk</th><th>Pulang</th><th>Status</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
+        ? '<div class="tablewrap"><table><thead><tr>' +
+            th("Kode","kode") + th("Nama","nama") + th("Kelas / divisi","grup","kol-grup") +
+            th("Masuk","masuk") + th("Pulang","pulang") + th("Status","status") +
+            '</tr></thead><tbody>' + rows + '</tbody></table></div>'
         : '<div class="empty">' + IKON.kosong + '<b>Belum ada peserta terdaftar</b>' +
           '<span>Buka tab Peserta untuk menambahkannya.</span></div>') +
     '</div>' +
@@ -11775,7 +11833,16 @@ function unduhQR(kode){
 }
 
 /* ---------- interaksi ---------- */
+function ubahUrutan(kolom){
+  var u = (state.tab === "rekap") ? state.urutRekap : state.urutPeserta;
+  if(u.kolom === kolom) u.arah = (u.arah === "asc") ? "desc" : "asc";
+  else { u.kolom = kolom; u.arah = "asc"; }
+  gambarUlang();
+}
+
 document.addEventListener("click", function(ev){
+  var kepala = ev.target.closest("[data-urut]");
+  if(kepala){ ubahUrutan(kepala.dataset.urut); return; }
   var t = ev.target.closest("[data-act], [data-tab], [data-mode]");
   if(!t) return;
 
@@ -11844,6 +11911,11 @@ document.addEventListener("submit", function(ev){
 });
 
 document.addEventListener("keydown", function(ev){
+  if((ev.key === "Enter" || ev.key === " ") && ev.target && ev.target.dataset && ev.target.dataset.urut){
+    ev.preventDefault();
+    ubahUrutan(ev.target.dataset.urut);
+    return;
+  }
   if(ev.key === "Enter" && ev.target && ev.target.id === "kodeManual"){
     ev.preventDefault();
     if(ev.target.value.trim()){ proses(ev.target.value); ev.target.value = ""; }
