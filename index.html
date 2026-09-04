@@ -11047,7 +11047,13 @@ function pasangSnapshotFB(){
     });
     state.evaluasi = arr;
     gambarUlang();
-  }, function(){ state.evaluasi = []; }));
+  }, function(e){
+    state.evaluasi = [];
+    if(e && e.code === "permission-denied" && state.penilai){
+      toast("bad", "Gagal memuat evaluasi",
+        "Akun ini belum ditandai penilai pada dokumen pengguna/<email>.");
+    }
+  }));
 
   // Peran hanya menentukan apa yang tampil; penegakan sebenarnya ada di aturan Firestore.
   fbLepas.push(fb.doc("pengguna/" + (fbUser && fbUser.email)).onSnapshot(function(snap){
@@ -11086,8 +11092,8 @@ function cadangkanLokal(){
 function pesanFirestore(kode){
   if(kode === "permission-denied"){
     return window.APPCHECK_SITE_KEY
-      ? "Ditolak Firestore. Dua kemungkinan: email Anda belum terdaftar di koleksi pengguna, atau App Check menolak permintaan ini."
-      : "Ditolak Firestore. Email Anda kemungkinan belum terdaftar di koleksi pengguna, atau perannya tidak mengizinkan tindakan ini.";
+      ? "Ditolak Firestore. Periksa daftar email pada Rules — pastikan email Anda sudah menggantikan contoh 'email-anda@contoh.com'. Bila sudah benar, kemungkinan App Check yang menolak."
+      : "Ditolak Firestore. Periksa daftar email pada Rules — pastikan email Anda sudah menggantikan contoh 'email-anda@contoh.com'.";
   }
   if(kode === "unavailable") return "Tidak ada koneksi ke Firestore. Data yang dipindai tersimpan luring dan terkirim saat koneksi kembali.";
   return "Gagal memuat (" + (kode || "tidak diketahui") + ").";
