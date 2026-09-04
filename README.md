@@ -1,7 +1,9 @@
-# Presensi — absensi kartu QR
+# Presensi INAGA PEM Akamigas SC
 
-Aplikasi presensi berbasis pemindaian kode QR. Berjalan sepenuhnya di browser: pemindai
-QR, pembuat kartu QR, rekap harian, dan ekspor Excel maupun CSV.
+Absensi kartu QR untuk INAGA PEM Akamigas Student Chapter.
+
+Berjalan sepenuhnya di browser: pemindai QR, pembuat kartu QR, rekap harian, dan ekspor
+Excel maupun CSV.
 
 **Halaman langsung:** <https://radja4100.github.io/Absensi-QR/>
 
