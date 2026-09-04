@@ -10333,6 +10333,24 @@ main{padding:22px 0 60px}
 .row-f label{font-size:13.5px; color:var(--ink-2)}
 .row-f input{width:110px; padding:6px 9px; border:1px solid var(--line-strong); border-radius:7px; background:var(--surface-2); font-family:"IBM Plex Mono",monospace; text-align:right}
 .hint{font-size:12.5px; color:var(--muted); line-height:1.5}
+.hint.m0{margin:0}
+.tautan{appearance:none; border:0; background:none; padding:0; cursor:pointer;
+  color:var(--accent); font:inherit; font-weight:600; text-decoration:underline;
+  text-underline-offset:2px}
+.tautan:hover{color:var(--accent-ink)}
+.setelan .row-f{align-items:flex-start; gap:16px}
+.setelan .row-f > div:first-child{min-width:0; flex:1}
+.setelan .row-f label{display:block; font-size:14px; color:var(--ink); font-weight:600; margin-bottom:2px}
+.setelan .row-f .seg{flex:none}
+.setelan .row-f .nilai{font-family:"IBM Plex Mono",monospace; font-size:14px; color:var(--ink-2); white-space:nowrap}
+.setelan .card-pad.rows{gap:16px}
+@media (max-width:560px){
+  .setelan .row-f{flex-direction:column; align-items:stretch; gap:9px}
+  .setelan .row-f .seg{width:100%}
+  .setelan .row-f .seg button{flex:1}
+  .setelan .row-f input{width:100%; text-align:left}
+  .setelan .row-f .nilai{text-align:left}
+}
 
 .tablewrap{overflow-x:auto}
 table{width:100%; border-collapse:collapse; font-size:14px}
@@ -10526,6 +10544,7 @@ td.nm{white-space:nowrap}
         <button role="menuitem" data-tab="peserta">Peserta</button>
         <button role="menuitem" data-tab="rekap">Rekap</button>
         <button role="menuitem" data-tab="dasbor">Dasbor</button>
+        <button role="menuitem" data-tab="pengaturan">Pengaturan</button>
       </nav>
     </div>
   </div>
@@ -10588,6 +10607,8 @@ var state = {
   urutRekap:   {kolom:"kode", arah:"asc"},
   urutDasbor:  {kolom:"persen", arah:"desc"},
   periode: 30,                       // 7, 30, atau 0 untuk semua yang tercatat
+  tampilan: {tema:"otomatis", suara:true},
+  batasHari: 60,                     // berapa hari riwayat yang dimuat dari server
   kameraPesan: "",
   contohHari: contohHari()
 };
@@ -10612,6 +10633,10 @@ function daftarPeserta(){
 function hariRec(iso){
   var src = state.demo ? state.contohHari : state.hari;
   return (src[iso] && src[iso].catatan) ? src[iso].catatan : {};
+}
+function batasTerlambat(){
+  var m = menit(state.pengaturan.jamMasuk) + (+state.pengaturan.toleransi || 0);
+  return pad(Math.floor(m / 60) % 24) + ":" + pad(m % 60);
 }
 function statusMasuk(hm){
   var batas = menit(state.pengaturan.jamMasuk) + (+state.pengaturan.toleransi || 0);
@@ -10692,7 +10717,35 @@ function ringkas(iso){
 }
 
 /* ---------- penyimpanan ---------- */
-var db = null, dl = null, LS = "presensia.v1";
+var db = null, dl = null, LS = "presensia.v1", LS_TAMPILAN = "presensia.tampilan";
+
+/* Tema yang dipasang tuan rumah saat halaman dibuka. Dipakai kembali kalau
+   pengguna memilih "otomatis", supaya kami tidak menghapus pilihan tuan rumah. */
+var TEMA_AWAL = document.documentElement.getAttribute("data-theme");
+
+function bacaTampilan(){
+  try{
+    var v = JSON.parse(localStorage.getItem(LS_TAMPILAN) || "null");
+    if(v && typeof v === "object"){
+      if(v.tema) state.tampilan.tema = v.tema;
+      if(typeof v.suara === "boolean") state.tampilan.suara = v.suara;
+      if(v.batasHari) state.batasHari = v.batasHari;
+    }
+  }catch(e){}
+}
+function tulisTampilan(){
+  try{
+    localStorage.setItem(LS_TAMPILAN, JSON.stringify({
+      tema: state.tampilan.tema, suara: state.tampilan.suara, batasHari: state.batasHari
+    }));
+  }catch(e){}
+}
+function terapkanTema(){
+  var akar = document.documentElement, t = state.tampilan.tema;
+  if(t === "terang" || t === "gelap") akar.setAttribute("data-theme", t === "gelap" ? "dark" : "light");
+  else if(TEMA_AWAL) akar.setAttribute("data-theme", TEMA_AWAL);
+  else akar.removeAttribute("data-theme");
+}
 
 function bacaLokal(){
   try{
@@ -10789,6 +10842,17 @@ function mulaiFirebase(){
     });
   });
 }
+function muatUlangRiwayat(){
+  if(fb){
+    fbLepas.forEach(function(f){ try{ f(); }catch(e){} });
+    fbLepas = [];
+    pasangSnapshotFB();
+    toast("ok", "Riwayat dimuat ulang", state.batasHari + " hari terakhir");
+  }else if(db){
+    pasangSnapshot();
+    toast("ok", "Riwayat dimuat ulang", state.batasHari + " hari terakhir");
+  }
+}
 function pasangSnapshotFB(){
   fbLepas.push(fb.collection("peserta").onSnapshot(function(snap){
     var arr = [];
@@ -10801,7 +10865,7 @@ function pasangSnapshotFB(){
     gambarUlang();
   }, function(e){ toast("bad", "Gagal memuat peserta", pesanFirestore(e && e.code)); }));
 
-  fbLepas.push(fb.collection("absensi").orderBy("tanggal","desc").limit(60).onSnapshot(function(snap){
+  fbLepas.push(fb.collection("absensi").orderBy("tanggal","desc").limit(state.batasHari).onSnapshot(function(snap){
     var map = {};
     snap.forEach(function(d){
       var v = d.data() || {};
@@ -10895,7 +10959,7 @@ function pasangSnapshot(){
     gambarUlang();
   }, function(err){ toast("bad", "Gagal memuat peserta", err.code); });
 
-  db.collection("absensi").orderBy("tanggal","desc").limit(60).onSnapshot(function(snap){
+  db.collection("absensi").orderBy("tanggal","desc").limit(state.batasHari).onSnapshot(function(snap){
     var map = {};
     snap.docs.forEach(function(d){
       var v = d.data() || {};
@@ -11016,6 +11080,7 @@ var video = $("#cam"), canvas = $("#grab"), ctx = canvas.getContext("2d", {willR
 var stream = null, jalan = false, frame = 0, terakhir = {}, actx = null;
 
 function bunyi(ok){
+  if(!state.tampilan.suara) return;
   try{
     if(!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
     var o = actx.createOscillator(), g = actx.createGain();
@@ -11632,7 +11697,7 @@ function csvBaris(v){
 }
 
 /* ---------- render ---------- */
-var JUDUL_TAB = {scan:"Pindai", peserta:"Peserta", rekap:"Rekap", dasbor:"Dasbor"};
+var JUDUL_TAB = {scan:"Pindai", peserta:"Peserta", rekap:"Rekap", dasbor:"Dasbor", pengaturan:"Pengaturan"};
 
 function bukaMenu(buka){
   var tombol = $("#tombolMenu"), panel = $("#menuNav"), tirai = $("#tiraiMenu");
@@ -11703,6 +11768,7 @@ function renderPanel(){
   if(state.tab === "scan")         p.innerHTML = viewScan();
   else if(state.tab === "peserta")  p.innerHTML = viewPeserta();
   else if(state.tab === "dasbor")   p.innerHTML = viewDasbor();
+  else if(state.tab === "pengaturan") p.innerHTML = viewPengaturan();
   else                              p.innerHTML = viewRekap();
 
   if(state.tab === "scan"){
@@ -11764,17 +11830,11 @@ function viewScan(){
         '<div class="card-head"><h2>Aktivitas terakhir</h2><span class="note">' + tglPanjang(iso) + '</span></div>' +
         logHTML() +
       '</div>' +
-      '<div class="card">' +
-        '<div class="card-head"><h2>Aturan jam</h2></div>' +
-        '<div class="card-pad rows">' +
-          '<div class="row-f"><label for="jamMasuk">Jam masuk</label>' +
-            '<input id="jamMasuk" type="time" value="' + esc(state.pengaturan.jamMasuk) + '"></div>' +
-          '<div class="row-f"><label for="toleransi">Toleransi (menit)</label>' +
-            '<input id="toleransi" type="number" min="0" max="120" value="' + esc(state.pengaturan.toleransi) + '"></div>' +
-          '<p class="hint">Pindaian setelah pukul ' +
-            esc(state.pengaturan.jamMasuk) + ' + ' + esc(state.pengaturan.toleransi) +
-            ' menit dicatat sebagai terlambat.</p>' +
-        '</div>' +
+      '<div class="card card-pad">' +
+        '<p class="hint m0">Tercatat <b>terlambat</b> setelah pukul <b>' + esc(batasTerlambat()) + '</b>' +
+        ' — dari jam masuk ' + esc(state.pengaturan.jamMasuk) + ' ditambah toleransi ' +
+        esc(state.pengaturan.toleransi) + ' menit. ' +
+        '<button class="tautan" data-tab="pengaturan">Ubah di Pengaturan</button></p>' +
       '</div>' +
     '</div>' +
   '</div>' +
@@ -11894,6 +11954,88 @@ function grafikDasbor(){
     bagian + '</svg>';
 }
 
+function pilihanSeg(id, nilaiSekarang, daftar, atribut){
+  return '<div class="seg" id="' + id + '">' + daftar.map(function(o){
+    return '<button ' + atribut + '="' + o[0] + '" aria-pressed="' +
+           (String(nilaiSekarang) === String(o[0])) + '">' + esc(o[1]) + '</button>';
+  }).join("") + '</div>';
+}
+
+function viewPengaturan(){
+  var simpanTeks = state.storage === "server" ? "Server artefak"
+                 : state.storage === "firebase" ? "Firebase Firestore"
+                 : "Browser di perangkat ini";
+  var diServer = (state.storage === "server" || state.storage === "firebase");
+
+  return '' +
+  '<div class="col setelan">' +
+
+    '<div class="card">' +
+      '<div class="card-head"><h2>Tampilan</h2></div>' +
+      '<div class="card-pad rows">' +
+        '<div class="row-f"><div><label>Tema</label>' +
+          '<p class="hint m0">Otomatis mengikuti setelan terang atau gelap perangkat Anda.</p></div>' +
+          pilihanSeg("segTema", state.tampilan.tema,
+            [["otomatis","Otomatis"],["terang","Terang"],["gelap","Gelap"]], "data-tema") +
+        '</div>' +
+        '<div class="row-f"><div><label>Bunyi saat memindai</label>' +
+          '<p class="hint m0">Matikan bila memindai di ruangan yang perlu tenang.</p></div>' +
+          pilihanSeg("segSuara", state.tampilan.suara,
+            [[true,"Nyala"],[false,"Mati"]], "data-suara") +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+
+    '<div class="card">' +
+      '<div class="card-head"><h2>Aturan jam</h2>' +
+        '<span class="note">terlambat setelah ' + esc(batasTerlambat()) + '</span></div>' +
+      '<div class="card-pad rows">' +
+        '<div class="row-f"><div><label for="jamMasuk">Jam masuk</label>' +
+          '<p class="hint m0">Batas kehadiran tepat waktu.</p></div>' +
+          '<input id="jamMasuk" type="time" value="' + esc(state.pengaturan.jamMasuk) + '"></div>' +
+        '<div class="row-f"><div><label for="toleransi">Toleransi (menit)</label>' +
+          '<p class="hint m0">Kelonggaran sebelum dihitung terlambat.</p></div>' +
+          '<input id="toleransi" type="number" min="0" max="120" value="' + esc(state.pengaturan.toleransi) + '"></div>' +
+        (diServer ? '<p class="hint">Aturan ini tersimpan di server, jadi berlaku sama di semua perangkat.</p>' : '') +
+      '</div>' +
+    '</div>' +
+
+    '<div class="card">' +
+      '<div class="card-head"><h2>Data</h2><span class="note">' + esc(simpanTeks) + '</span></div>' +
+      '<div class="card-pad rows">' +
+        (diServer
+          ? '<div class="row-f"><div><label>Riwayat yang dimuat</label>' +
+              '<p class="hint m0">Makin panjang, makin lengkap Dasbor, tetapi memuatnya sedikit lebih lama.</p></div>' +
+              pilihanSeg("segBatas", state.batasHari,
+                [[60,"60 hari"],[180,"180 hari"],[365,"1 tahun"]], "data-batas") +
+            '</div>'
+          : '') +
+        '<p class="hint m0">' + esc(catatanSimpan()) + '</p>' +
+        '<div class="manual" style="padding:0">' +
+          '<button class="btn" data-act="cadangkan">' + IKON.unduh + 'Cadangkan (JSON)</button>' +
+          '<label class="btn" for="filePulih">Pulihkan dari berkas</label>' +
+          '<input id="filePulih" class="sr" type="file" accept=".json,application/json">' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+
+    '<div class="card">' +
+      '<div class="card-head"><h2>Tentang</h2></div>' +
+      '<div class="card-pad rows">' +
+        '<div class="row-f"><label>Peserta terdaftar</label><span class="nilai">' + daftarPeserta().length + '</span></div>' +
+        '<div class="row-f"><label>Hari absensi tercatat</label><span class="nilai">' + jumlahHari() + '</span></div>' +
+        '<div class="row-f"><label>Penyimpanan</label><span class="nilai">' + esc(simpanTeks) + '</span></div>' +
+        (state.storage === "lokal"
+          ? '<div class="row-f"><div><label>Hapus data di perangkat ini</label>' +
+              '<p class="hint m0">Menghapus seluruh peserta dan absensi yang tersimpan di browser ini. Tidak dapat dibatalkan — cadangkan dulu.</p></div>' +
+              '<button class="btn danger" data-act="hapusSemua">Hapus</button></div>'
+          : '') +
+      '</div>' +
+    '</div>' +
+
+  '</div>';
+}
+
 function viewDasbor(){
   var r = ringkasDasbor(), st = urutkanDasbor(statistikPeserta());
   var pilihan = [[7,"7 hari"],[30,"30 hari"],[0,"Semua"]].map(function(o){
@@ -11985,18 +12127,6 @@ function viewRekap(){
             '</tr></thead><tbody>' + rows + '</tbody></table></div>'
         : '<div class="empty">' + IKON.kosong + '<b>Belum ada peserta terdaftar</b>' +
           '<span>Buka tab Peserta untuk menambahkannya.</span></div>') +
-    '</div>' +
-    '<div class="card">' +
-      '<div class="card-head"><h2>Cadangan data</h2>' +
-        '<span class="note">' + jumlahHari() + ' hari tercatat</span></div>' +
-      '<div class="card-pad rows">' +
-        '<p class="hint">' + esc(catatanSimpan()) + '</p>' +
-        '<div class="manual" style="padding:0">' +
-          '<button class="btn" data-act="cadangkan">' + IKON.unduh + 'Cadangkan (JSON)</button>' +
-          '<label class="btn" for="filePulih">Pulihkan dari berkas</label>' +
-          '<input id="filePulih" class="sr" type="file" accept=".json,application/json">' +
-        '</div>' +
-      '</div>' +
     '</div>' +
   '</div>';
 }
@@ -12227,7 +12357,7 @@ document.addEventListener("click", function(ev){
   if(ev.target.id === "tiraiMenu"){ bukaMenu(false); return; }
   var kepala = ev.target.closest("[data-urut]");
   if(kepala){ ubahUrutan(kepala.dataset.urut); return; }
-  var t = ev.target.closest("[data-act], [data-tab], [data-mode], [data-periode]");
+  var t = ev.target.closest("[data-act], [data-tab], [data-mode], [data-periode], [data-tema], [data-suara], [data-batas]");
   if(!t) return;
 
   if(t.dataset.tab){
@@ -12239,6 +12369,17 @@ document.addEventListener("click", function(ev){
   }
   if(t.dataset.mode){ state.mode = t.dataset.mode; gambarUlang(); return; }
   if(t.dataset.periode !== undefined){ state.periode = +t.dataset.periode; gambarUlang(); return; }
+  if(t.dataset.tema){
+    state.tampilan.tema = t.dataset.tema; tulisTampilan(); terapkanTema(); gambarUlang(); return;
+  }
+  if(t.dataset.suara !== undefined){
+    state.tampilan.suara = (t.dataset.suara === "true"); tulisTampilan(); gambarUlang();
+    if(state.tampilan.suara) bunyi(true);
+    return;
+  }
+  if(t.dataset.batas !== undefined){
+    state.batasHari = +t.dataset.batas; tulisTampilan(); muatUlangRiwayat(); gambarUlang(); return;
+  }
 
   var act = t.dataset.act;
   if(act === "start")      mulaiKamera();
@@ -12249,6 +12390,14 @@ document.addEventListener("click", function(ev){
   }
   else if(act === "kosongkan"){ keluarDemo(); gambarUlang(); }
   else if(act === "cadangkan") cadangkan();
+  else if(act === "hapusSemua"){
+    if(confirm("Hapus SELURUH peserta dan absensi yang tersimpan di perangkat ini?" + String.fromCharCode(10,10) + "Tindakan ini tidak dapat dibatalkan.")){
+      try{ localStorage.removeItem(LS); }catch(e){}
+      state.peserta = []; state.hari = {}; state.log = []; state.demo = true;
+      toast("ok", "Data perangkat ini dihapus", "");
+      gambarUlang();
+    }
+  }
   else if(act === "cadangkanLokal") cadangkanLokal();
   else if(act === "keluar"){ if(confirm("Keluar dari akun ini?")) keluarFirebase(); }
   else if(act === "qr")     bukaQR(t.dataset.kode);
@@ -12369,6 +12518,8 @@ function detak(){
 }
 detak(); setInterval(detak, 1000);
 
+bacaTampilan();
+terapkanTema();
 chipSimpan();
 gambarUlang();
 siapkanPenyimpanan();
