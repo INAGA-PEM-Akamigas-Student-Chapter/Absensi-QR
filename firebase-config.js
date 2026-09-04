@@ -32,5 +32,5 @@ window.FIREBASE_CONFIG = {
  * PENTING: jangan aktifkan penegakan (Enforce) di Console sebelum halaman diuji
  * dan tokennya terbukti terbit, karena permintaan tanpa token akan ditolak.
  */
-window.APPCHECK_SITE_KEY = "6LdEeagtAAAAAOxY-dRKf6FHmnoaCvahO-dyplvO";
+window.APPCHECK_SITE_KEY = "6LfVoagtAAAAAHKvPsMuWDK-95EAxEEJRRa2PCI6";
 window.APPCHECK_PROVIDER = "enterprise";   // "enterprise" atau "v3"
