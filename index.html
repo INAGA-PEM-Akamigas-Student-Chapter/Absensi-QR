@@ -10196,6 +10196,8 @@ header.top{background:var(--surface); border-bottom:1px solid var(--line); posit
 }
 .chip .dot{width:7px; height:7px; border-radius:50%; background:var(--muted); flex:none}
 .chip.on{border-color:var(--accent); color:var(--accent); background:var(--accent-soft)}
+.chip.tolak{border-color:var(--bad); color:var(--bad); background:var(--bad-soft)}
+.chip.tolak .dot{background:var(--bad)}
 .chip.on .dot{background:var(--accent)}
 
 .akun-bungkus{position:relative; display:flex; align-items:center}
@@ -10693,6 +10695,7 @@ var state = {
   evaluasi: [],                      // {id, kode, tanggal, nilai, catatan, dibuat}
   penilai: false,                    // boleh membuka bagian Evaluasi
   kelola: false,                     // boleh mengubah peserta dan aturan jam
+  ditolak: null,                     // keterangan bila Firestore menolak membaca
   bukaEval: null,                    // kode peserta yang sedang dilihat riwayatnya
   bagian: "absensi",                 // "absensi" atau "evaluasi"
   kameraPesan: "",
@@ -10927,6 +10930,14 @@ function pasangAvatar(surel){
 
 function chipSimpan(){
   var chip = $("#simpanChip"), teks = $("#simpanTeks");
+  if(state.ditolak){
+    chip.className = "chip tolak";
+    teks.textContent = "Data tidak tersimpan";
+    chip.title = "Firestore menolak membaca data absensi (" + state.ditolak + "). " +
+                 "Pemindaian tidak akan tersimpan sampai email akun ini diizinkan pada aturan Firestore.";
+    return;
+  }
+  chip.title = "";
   var bungkus = $("#akunBungkus");
   var pakaiAvatar = (state.storage === "firebase" && fbUser && fbUser.email);
   if(bungkus) bungkus.hidden = !pakaiAvatar;
@@ -11027,9 +11038,10 @@ function pasangSnapshotFB(){
       arr.push({kode: v.kode || d.id, nama: v.nama || "(tanpa nama)", grup: v.grup || "", staff: !!v.staff});
     });
     state.peserta = arr;
+    state.ditolak = null;
     if(arr.length) state.demo = false;
     gambarUlang();
-  }, function(e){ toast("bad", "Gagal memuat peserta", pesanFirestore(e && e.code)); }));
+  }, function(e){ catatPenolakan(e); }));
 
   fbLepas.push(fb.collection("absensi").orderBy("tanggal","desc").limit(state.batasHari).onSnapshot(function(snap){
     var map = {};
@@ -11039,7 +11051,7 @@ function pasangSnapshotFB(){
     });
     state.hari = map;
     gambarUlang();
-  }, function(e){ toast("bad", "Gagal memuat absensi", pesanFirestore(e && e.code)); }));
+  }, function(e){ catatPenolakan(e); }));
 
   fbLepas.push(fb.collection("evaluasi").onSnapshot(function(snap){
     var arr = [];
@@ -11093,6 +11105,14 @@ function cadangkanLokal(){
     aplikasi: "presensia", versi: 1, dibuat: new Date().toISOString(),
     peserta: l.peserta, hari: l.hari || {}, pengaturan: l.pengaturan || state.pengaturan
   }, null, 2));
+}
+/* Penolakan pembacaan adalah keadaan, bukan kejadian sesaat: satu keterangan
+   tenang di atas halaman lebih berguna daripada munculan berulang tiap koleksi. */
+function catatPenolakan(e){
+  var kode = e && e.code;
+  // Luring bukan penolakan: Firestore menyusul sendiri saat koneksi kembali.
+  state.ditolak = (kode && kode !== "unavailable") ? kode : null;
+  chipSimpan();
 }
 function pesanFirestore(kode){
   if(kode === "permission-denied"){
