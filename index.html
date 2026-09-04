@@ -10347,7 +10347,8 @@ td.act{text-align:right; white-space:nowrap}
 
 .gerbang{position:fixed; inset:0; z-index:70; display:grid; place-items:center; padding:20px; background:var(--paper); overflow-y:auto}
 .sheet.masuk{max-width:360px; width:100%; padding:28px 26px 26px; display:flex; flex-direction:column; gap:14px; border:1px solid var(--line)}
-.sheet.masuk .stamp.besar{width:64px; height:64px; font-size:18px; margin-bottom:4px}
+.sheet.masuk .stamp.besar{width:64px; height:64px; align-self:center; margin-bottom:2px}
+.sheet.masuk h2{text-align:center}
 .sheet.masuk h2{font-size:21px; font-weight:700; letter-spacing:-.015em}
 .sheet.masuk .hint{margin:0}
 .sheet.masuk .field label{margin-bottom:1px}
@@ -11221,13 +11222,13 @@ function renderMasuk(){
     '<div class="gerbang">' +
       '<form class="sheet masuk" id="formMasuk">' +
         '<div class="stamp logo besar" role="img" aria-label="Logo INAGA PEM Akamigas Student Chapter"></div>' +
-        '<h2>Masuk ke Presensi INAGA</h2>' +
+        '<h2>Login</h2>' +
         '<div class="field"><label for="mEmail">Email</label>' +
           '<input id="mEmail" type="email" autocomplete="username" required></div>' +
         '<div class="field"><label for="mSandi">Kata sandi</label>' +
           '<input id="mSandi" type="password" autocomplete="current-password" required></div>' +
         '<p class="pesan-masuk" id="pesanMasuk"></p>' +
-        '<button class="btn primary lebar" type="submit">Masuk</button>' +
+        '<button class="btn primary lebar" type="submit">Login</button>' +
         adaDataLokal() +
       '</form>' +
     '</div>';
