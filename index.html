@@ -10521,7 +10521,17 @@ function aktifkanAppCheck(){
   var kunci = window.APPCHECK_SITE_KEY;
   if(!kunci || !firebase.appCheck) return false;
   try{
-    firebase.appCheck().activate(kunci, true);   // true = token diperbarui otomatis
+    // Penyedia harus sama dengan yang terdaftar di Firebase Console -> App Check -> Apps.
+    // Salah pilih membuat server menjawab "App not registered" walau aplikasinya terdaftar.
+    var jenis = String(window.APPCHECK_PROVIDER || "enterprise").toLowerCase();
+    var penyedia;
+    if(jenis === "v3" && firebase.appCheck.ReCaptchaV3Provider)
+      penyedia = new firebase.appCheck.ReCaptchaV3Provider(kunci);
+    else if(firebase.appCheck.ReCaptchaEnterpriseProvider)
+      penyedia = new firebase.appCheck.ReCaptchaEnterpriseProvider(kunci);
+    else
+      penyedia = kunci;                          // SDK lama: string berarti reCAPTCHA v3
+    firebase.appCheck().activate(penyedia, true);  // true = token diperbarui otomatis
     return true;
   }catch(e){
     toast("warn", "App Check gagal aktif", (e && e.message) || "");

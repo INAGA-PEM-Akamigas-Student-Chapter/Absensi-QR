@@ -21,12 +21,16 @@ window.FIREBASE_CONFIG = {
 
 /* Firebase App Check -- lapisan tambahan (opsional).
  *
- * Isi dengan SITE KEY reCAPTCHA v3 dari Firebase Console -> App Check.
- * Site key memang boleh publik; yang rahasia adalah SECRET KEY, dan itu hanya
- * ditempel di Firebase Console, tidak pernah masuk ke berkas ini.
+ * SITE KEY dan PROVIDER di bawah harus sama persis dengan yang terdaftar di
+ * Firebase Console -> App Check -> Apps. Kalau providernya berbeda, server
+ * menjawab "App not registered" walaupun aplikasinya sebenarnya sudah terdaftar.
  *
- * Selama masih kosong, aplikasi berjalan normal tanpa App Check.
- * PENTING: jangan aktifkan penegakan (Enforce) di Console sebelum nilai ini
- * terisi dan halaman sudah diuji, karena permintaan tanpa token akan ditolak.
+ * Site key memang boleh publik. Yang rahasia adalah secret key, dan itu hanya
+ * ditempel di Firebase Console -- tidak pernah masuk ke berkas ini.
+ *
+ * Selama site key kosong, aplikasi berjalan normal tanpa App Check.
+ * PENTING: jangan aktifkan penegakan (Enforce) di Console sebelum halaman diuji
+ * dan tokennya terbukti terbit, karena permintaan tanpa token akan ditolak.
  */
-window.APPCHECK_SITE_KEY = "6LdEeagtAAAAAFwMXoTyERZ0MI_BsBfZAv2aXhGh";
+window.APPCHECK_SITE_KEY = "6LdEeagtAAAAAOxY-dRKf6FHmnoaCvahO-dyplvO";
+window.APPCHECK_PROVIDER = "enterprise";   // "enterprise" atau "v3"
