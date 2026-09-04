@@ -10367,6 +10367,91 @@ td.act{text-align:right; white-space:nowrap}
 body{margin:0}
 img{max-width:100%}
 [hidden]{display:none !important}
+
+/* ---------- pemolesan tampilan ---------- */
+.btn svg{flex:none}
+.btn:active{transform:translateY(1px)}
+
+/* bilah proporsi di bawah tiga angka ringkasan */
+.stats .bilah{grid-column:1 / -1; display:flex; height:5px; background:var(--sunk)}
+.stats .bilah i{display:block; height:100%; transition:width .35s ease}
+.stats .bilah .b-hadir{background:var(--ok)}
+.stats .bilah .b-telat{background:var(--warn)}
+.stat .k{display:flex; align-items:center; gap:6px}
+.stat .k::before{content:""; width:7px; height:7px; border-radius:2px; flex:none}
+.stat.s-hadir .k::before{background:var(--ok)}
+.stat.s-telat .k::before{background:var(--warn)}
+.stat.s-belum .k::before{background:var(--line-strong)}
+.stat .v{display:flex; align-items:baseline; gap:7px}
+.stat .v small{font-family:"Source Sans 3",sans-serif; font-size:12.5px; font-weight:600; color:var(--muted)}
+
+/* bayangan halus saat tabel bisa digeser mendatar */
+.tablewrap{
+  background:
+    linear-gradient(to right, var(--surface) 30%, transparent) left center / 34px 100% no-repeat,
+    linear-gradient(to left,  var(--surface) 30%, transparent) right center / 34px 100% no-repeat,
+    radial-gradient(farthest-side at 0 50%, rgba(23,33,29,.13), transparent) left center / 13px 100% no-repeat,
+    radial-gradient(farthest-side at 100% 50%, rgba(23,33,29,.13), transparent) right center / 13px 100% no-repeat;
+  background-attachment: local, local, scroll, scroll;
+}
+tbody tr{transition:background .12s}
+
+/* keadaan kosong yang tidak terasa seperti kesalahan */
+.empty{display:flex; flex-direction:column; align-items:center; gap:9px; padding:30px 20px}
+.empty svg{color:var(--line-strong)}
+.empty b{display:block; font-family:Archivo,sans-serif; font-weight:600; font-size:14.5px; color:var(--ink-2)}
+.empty span{max-width:34ch; display:block}
+
+/* kop halaman pada layar sempit */
+@media (max-width:600px){
+  .topbar{gap:10px 12px; padding:11px 0}
+  .brand{gap:9px}
+  .stamp{width:34px; height:34px}
+  .brand h1{font-size:16px}
+  .brand .sub{font-size:11.5px}
+  .clock .jam{font-size:19px}
+  .clock .tgl{font-size:11.5px}
+  #simpanChip{order:9; flex-basis:100%; justify-content:center}
+  #tombolKeluar{order:10}
+  nav.tabs button{padding:10px 13px 11px; font-size:13.5px}
+  main{padding:16px 0 48px}
+  .wrap{padding:0 14px}
+  .card-pad, .card-head, .scanbar, .manual, .rekapbar{padding-left:14px; padding-right:14px}
+  th, td{padding-left:12px; padding-right:12px}
+  .stat{padding:11px 13px}
+  .stat .v{font-size:24px}
+}
+
+td.nm{white-space:nowrap}
+.sub-grup{display:none}
+.teks-aksi{display:inline}
+.lbl-pendek{display:none}
+.manual .btn, .manual label.btn{white-space:nowrap}
+@media (max-width:560px){
+  .lbl-panjang{display:none}
+  .lbl-pendek{display:inline}
+  .kol-grup{display:none}
+  .sub-grup{display:block; font-weight:400; font-size:12px; color:var(--muted); margin-top:1px}
+}
+@media (max-width:560px){
+  .teks-aksi{display:none}
+  td.act .btn{padding:6px 8px}
+  td.act .btn + .btn{margin-left:2px}
+}
+
+/* baris kendali pemindaian: tombol utama melebar di layar sempit */
+@media (max-width:560px){
+  .scanbar{gap:9px}
+  .seg{width:100%}
+  .seg button{flex:1; padding:7px 10px}
+  .scanbar .btn.primary.push{margin-left:0; width:100%; justify-content:center}
+  .manual .sep{display:none}
+  .manual input{flex:1 1 100%}
+  .manual .btn, .manual label.btn{flex:1; justify-content:center}
+  .formgrid button[type=submit]{grid-column:1 / -1; justify-content:center}
+  .rekapbar .btn{flex:1; justify-content:center}
+  .rekapbar .push{margin-left:0}
+}
 </style>
 <script src="vendor/firebase-app-compat.js"></script>
 <script src="vendor/firebase-app-check-compat.js"></script>
@@ -10470,6 +10555,14 @@ function hariRec(iso){
 function statusMasuk(hm){
   var batas = menit(state.pengaturan.jamMasuk) + (+state.pengaturan.toleransi || 0);
   return menit(hm) <= batas ? "hadir" : "terlambat";
+}
+function bilahRingkas(r){
+  var total = Math.max(1, r.total);
+  return '<div class="bilah" role="img" aria-label="' + r.hadir + ' hadir, ' + r.telat +
+         ' terlambat, ' + r.belum + ' belum hadir dari ' + r.total + ' peserta">' +
+         '<i class="b-hadir" style="width:' + (r.hadir / total * 100) + '%"></i>' +
+         '<i class="b-telat" style="width:' + (r.telat / total * 100) + '%"></i>' +
+         '</div>';
 }
 function ringkas(iso){
   var cat = hariRec(iso), total = daftarPeserta().length, hadir = 0, telat = 0;
@@ -11022,6 +11115,24 @@ async function unduh(namaFile, isi, tipe){
     toast("bad", "Gagal mengunduh", c || "");
   }
 }
+
+/* ---------- ikon ---------- */
+function svg(isi){
+  return '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" ' +
+         'stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + isi + '</svg>';
+}
+var IKON = {
+  kamera:  svg('<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h3l2-3h6l2 3h3a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="3.6"/>'),
+  henti:   svg('<rect x="5" y="5" width="14" height="14" rx="2.5"/>'),
+  gambar:  svg('<rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="8.5" cy="9.5" r="1.6"/><path d="m4 17 4.5-4.5L12 16l3-2.5L20 18"/>'),
+  unduh:   svg('<path d="M12 3v12"/><path d="m7.5 10.5 4.5 4.5 4.5-4.5"/><path d="M4 20h16"/>'),
+  qr:      svg('<rect x="3" y="3" width="7" height="7" rx="1.2"/><rect x="14" y="3" width="7" height="7" rx="1.2"/><rect x="3" y="14" width="7" height="7" rx="1.2"/><path d="M14 14h3v3h-3zM20 14h1M14 20h3M20 17v4"/>'),
+  tambah:  svg('<path d="M12 5v14M5 12h14"/>'),
+  catat:   svg('<path d="M20 6 9 17l-5-5"/>'),
+  kosong:  svg('<circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/>'),
+  hapus:   svg('<path d="M4 7h16M10 4h4M9 7v12M15 7v12M6 7l1 13h10l1-13"/>')
+};
+
 /* ---------- penulis XLSX ringkas ----------
    Sebuah .xlsx adalah arsip ZIP berisi beberapa berkas XML. Menulisnya sendiri
    jauh lebih ringan daripada menambah pustaka spreadsheet, dan tetap dibuka
@@ -11285,9 +11396,11 @@ function viewScan(){
   return '' +
   '<div class="col">' +
   '<div class="stats">' +
-    '<div class="stat s-hadir"><div class="k">Hadir</div><div class="v">' + r.hadir + '</div></div>' +
+    '<div class="stat s-hadir"><div class="k">Hadir</div><div class="v">' + r.hadir +
+      '<small>dari ' + r.total + '</small></div></div>' +
     '<div class="stat s-telat"><div class="k">Terlambat</div><div class="v">' + r.telat + '</div></div>' +
     '<div class="stat s-belum"><div class="k">Belum hadir</div><div class="v">' + r.belum + '</div></div>' +
+    bilahRingkas(r) +
   '</div>' +
   '<div class="grid-scan">' +
     '<div class="col">' +
@@ -11298,14 +11411,16 @@ function viewScan(){
             '<button data-mode="pulang" aria-pressed="' + (state.mode==="pulang") + '">Jam pulang</button>' +
           '</div>' +
           '<button class="btn primary push" data-act="' + (jalan ? "stop" : "start") + '">' +
-            (jalan ? "Hentikan kamera" : "Nyalakan kamera") + '</button>' +
+            (jalan ? IKON.henti + "Hentikan kamera" : IKON.kamera + "Nyalakan kamera") + '</button>' +
         '</div>' +
         '<div class="viewport idle" id="viewport">' + ph + reticle + '<div class="flash" id="flash"></div></div>' +
         '<div class="manual">' +
           '<input id="kodeManual" placeholder="Ketik kode peserta, mis. 2024-001" autocomplete="off">' +
-          '<button class="btn" data-act="manual">Catat</button>' +
+          '<button class="btn" data-act="manual">' + IKON.catat + 'Catat</button>' +
           '<span class="sep"></span>' +
-          '<label class="btn" for="fileQR">Pindai dari gambar</label>' +
+          '<label class="btn" for="fileQR">' + IKON.gambar +
+            '<span class="lbl-panjang">Pindai dari gambar</span>' +
+            '<span class="lbl-pendek">Dari gambar</span></label>' +
           '<input id="fileQR" class="sr" type="file" accept="image/*">' +
         '</div>' +
       '</div>' +
@@ -11334,7 +11449,8 @@ function viewScan(){
 
 function logHTML(){
   if(!state.log.length){
-    return '<div class="empty">Belum ada pindaian di sesi ini. Setiap kartu yang terbaca muncul di sini.</div>';
+    return '<div class="empty">' + IKON.qr + '<b>Belum ada pindaian</b>' +
+           '<span>Setiap kartu yang terbaca akan muncul di sini, lengkap dengan jam dan statusnya.</span></div>';
   }
   var li = state.log.slice(0, 12).map(function(x){
     var label = x.jenis === "pulang" ? "pulang" : x.jenis;
@@ -11350,11 +11466,16 @@ function viewPeserta(){
   var ps = daftarPeserta();
   var rows = ps.map(function(p){
     return '<tr><td class="num">' + esc(p.kode) + '</td>' +
-      '<td class="nm">' + esc(p.nama) + '</td>' +
-      '<td class="mini">' + esc(p.grup || "—") + '</td>' +
+      '<td class="nm">' + esc(p.nama) +
+        '<span class="sub-grup">' + esc(p.grup || "—") + '</span></td>' +
+      '<td class="mini kol-grup">' + esc(p.grup || "—") + '</td>' +
       '<td class="act">' +
-        '<button class="btn small" data-act="qr" data-kode="' + esc(p.kode) + '">Kartu QR</button> ' +
-        '<button class="btn small danger" data-act="hapus" data-kode="' + esc(p.kode) + '">Hapus</button>' +
+        '<button class="btn small" data-act="qr" data-kode="' + esc(p.kode) +
+          '" title="Kartu QR" aria-label="Kartu QR ' + esc(p.nama) + '">' + IKON.qr +
+          '<span class="teks-aksi">Kartu QR</span></button> ' +
+        '<button class="btn small danger" data-act="hapus" data-kode="' + esc(p.kode) +
+          '" title="Hapus" aria-label="Hapus ' + esc(p.nama) + '">' + IKON.hapus +
+          '<span class="teks-aksi">Hapus</span></button>' +
       '</td></tr>';
   }).join("");
 
@@ -11371,18 +11492,19 @@ function viewPeserta(){
             '<input id="fKode" required placeholder="2024-007"></div>' +
           '<div class="field"><label for="fGrup">Kelas / divisi</label>' +
             '<input id="fGrup" placeholder="XII IPA 1"></div>' +
-          '<button class="btn primary" type="submit">Tambah</button>' +
+          '<button class="btn primary" type="submit">' + IKON.tambah + 'Tambah</button>' +
         '</form>' +
       '</div>' +
     '</div>' +
     '<div class="card">' +
       '<div class="card-head"><h2>Daftar peserta</h2>' +
         '<span class="note">' + ps.length + ' orang</span>' +
-        (ps.length ? ' <button class="btn small" data-act="csvPeserta">Unduh daftar (CSV)</button>' : '') +
+        (ps.length ? ' <button class="btn small" data-act="csvPeserta">' + IKON.unduh + 'Unduh daftar (CSV)</button>' : '') +
       '</div>' +
       (ps.length
-        ? '<div class="tablewrap"><table><thead><tr><th>Kode</th><th>Nama</th><th>Kelas / divisi</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>'
-        : '<div class="empty">Belum ada peserta. Tambahkan lewat formulir di atas, lalu cetak kartu QR-nya.</div>') +
+        ? '<div class="tablewrap"><table><thead><tr><th>Kode</th><th>Nama</th><th class="kol-grup">Kelas / divisi</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>'
+        : '<div class="empty">' + IKON.kosong + '<b>Belum ada peserta</b>' +
+          '<span>Tambahkan lewat formulir di atas, lalu unduh dan cetak kartu QR-nya.</span></div>') +
     '</div>' +
   '</div>';
 }
@@ -11394,8 +11516,9 @@ function viewRekap(){
     var st = c.masuk ? (c.status || "hadir") : "belum";
     var label = st === "hadir" ? "Hadir" : st === "terlambat" ? "Terlambat" : "Belum hadir";
     return '<tr><td class="num">' + esc(p.kode) + '</td>' +
-      '<td class="nm">' + esc(p.nama) + '</td>' +
-      '<td class="mini">' + esc(p.grup || "—") + '</td>' +
+      '<td class="nm">' + esc(p.nama) +
+        '<span class="sub-grup">' + esc(p.grup || "—") + '</span></td>' +
+      '<td class="mini kol-grup">' + esc(p.grup || "—") + '</td>' +
       '<td class="num">' + esc(c.masuk || "—") + '</td>' +
       '<td class="num">' + esc(c.pulang || "—") + '</td>' +
       '<td><span class="pill ' + st + '">' + label + '</span></td></tr>';
@@ -11408,21 +11531,24 @@ function viewRekap(){
         '<label for="tglPilih" class="mini">Tanggal</label>' +
         '<input type="date" id="tglPilih" value="' + esc(iso) + '">' +
         '<span class="mini">' + tglPanjang(iso) + '</span>' +
-        '<button class="btn small push" data-act="xlsxRekap">Unduh Excel</button>' +
-        '<button class="btn small" data-act="csvRekap">Unduh CSV</button>' +
+        '<button class="btn small push" data-act="xlsxRekap">' + IKON.unduh + 'Unduh Excel</button>' +
+        '<button class="btn small" data-act="csvRekap">' + IKON.unduh + 'Unduh CSV</button>' +
       '</div>' +
       '<div class="trend">' + trendSVG() + '</div>' +
     '</div>' +
     '<div class="stats">' +
-      '<div class="stat s-hadir"><div class="k">Hadir</div><div class="v">' + r.hadir + '</div></div>' +
+      '<div class="stat s-hadir"><div class="k">Hadir</div><div class="v">' + r.hadir +
+        '<small>dari ' + r.total + '</small></div></div>' +
       '<div class="stat s-telat"><div class="k">Terlambat</div><div class="v">' + r.telat + '</div></div>' +
       '<div class="stat s-belum"><div class="k">Belum hadir</div><div class="v">' + r.belum + '</div></div>' +
+      bilahRingkas(r) +
     '</div>' +
     '<div class="card">' +
       '<div class="card-head"><h2>Daftar absensi</h2><span class="note">' + ps.length + ' peserta terdaftar</span></div>' +
       (ps.length
-        ? '<div class="tablewrap"><table><thead><tr><th>Kode</th><th>Nama</th><th>Kelas / divisi</th><th>Masuk</th><th>Pulang</th><th>Status</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
-        : '<div class="empty">Belum ada peserta terdaftar.</div>') +
+        ? '<div class="tablewrap"><table><thead><tr><th>Kode</th><th>Nama</th><th class="kol-grup">Kelas / divisi</th><th>Masuk</th><th>Pulang</th><th>Status</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
+        : '<div class="empty">' + IKON.kosong + '<b>Belum ada peserta terdaftar</b>' +
+          '<span>Buka tab Peserta untuk menambahkannya.</span></div>') +
     '</div>' +
     '<div class="card">' +
       '<div class="card-head"><h2>Cadangan data</h2>' +
@@ -11430,7 +11556,7 @@ function viewRekap(){
       '<div class="card-pad rows">' +
         '<p class="hint">' + esc(catatanSimpan()) + '</p>' +
         '<div class="manual" style="padding:0">' +
-          '<button class="btn" data-act="cadangkan">Cadangkan (JSON)</button>' +
+          '<button class="btn" data-act="cadangkan">' + IKON.unduh + 'Cadangkan (JSON)</button>' +
           '<label class="btn" for="filePulih">Pulihkan dari berkas</label>' +
           '<input id="filePulih" class="sr" type="file" accept=".json,application/json">' +
         '</div>' +
