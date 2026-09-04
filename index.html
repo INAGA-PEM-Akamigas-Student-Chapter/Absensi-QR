@@ -10336,6 +10336,16 @@ td.act{text-align:right; white-space:nowrap}
 .qrmeta .k{font-family:"IBM Plex Mono",monospace; font-size:13px; color:var(--muted); margin-top:2px}
 .qractions{display:flex; gap:8px; justify-content:center; margin-top:15px; flex-wrap:wrap}
 
+.gerbang{position:fixed; inset:0; z-index:70; display:grid; place-items:center; padding:20px; background:var(--paper); overflow-y:auto}
+.sheet.masuk{max-width:360px; width:100%; padding:28px 26px 26px; display:flex; flex-direction:column; gap:14px; border:1px solid var(--line)}
+.sheet.masuk .stamp.besar{width:46px; height:46px; font-size:18px; margin-bottom:2px}
+.sheet.masuk h2{font-size:21px; font-weight:700; letter-spacing:-.015em}
+.sheet.masuk .hint{margin:0}
+.sheet.masuk .field label{margin-bottom:1px}
+.pesan-masuk{margin:0; font-size:13px; color:var(--bad); min-height:1px; line-height:1.45}
+.pesan-masuk:empty{display:none}
+.btn.lebar{justify-content:center; width:100%; padding:10px 14px}
+
 .toasts{position:fixed; left:50%; transform:translateX(-50%); bottom:22px; z-index:80; display:flex; flex-direction:column; gap:8px; align-items:center; pointer-events:none}
 .toast{background:var(--surface); border:1px solid var(--line-strong); border-left:4px solid var(--accent); border-radius:9px; padding:9px 16px; box-shadow:var(--shadow); font-size:14px; max-width:88vw}
 .toast.ok{border-left-color:var(--ok)} .toast.warn{border-left-color:var(--warn)} .toast.bad{border-left-color:var(--bad)}
@@ -10345,6 +10355,10 @@ body{margin:0}
 img{max-width:100%}
 [hidden]{display:none !important}
 </style>
+<script src="vendor/firebase-app-compat.js"></script>
+<script src="vendor/firebase-auth-compat.js"></script>
+<script src="vendor/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
 </head>
 <body>
 
@@ -10358,6 +10372,7 @@ img{max-width:100%}
       </div>
     </div>
     <div id="simpanChip" class="chip"><span class="dot"></span><span id="simpanTeks">Menyiapkan…</span></div>
+    <button class="btn small" id="tombolKeluar" data-act="keluar" hidden>Keluar</button>
     <div class="clock">
       <div class="jam" id="jamNow">--:--:--</div>
       <div class="tgl" id="tglNow">—</div>
@@ -10377,6 +10392,7 @@ img{max-width:100%}
   <section id="panel"></section>
 </main>
 
+<div id="masukHost"></div>
 <div id="modalHost"></div>
 <div class="toasts" id="toasts" aria-live="polite"></div>
 <canvas id="grab" class="sr"></canvas>
@@ -10472,13 +10488,119 @@ function tulisLokal(){
 
 function chipSimpan(){
   var chip = $("#simpanChip"), teks = $("#simpanTeks");
+  var kel = $("#tombolKeluar");
+  if(kel) kel.hidden = !(state.storage === "firebase" && fbUser);
   if(state.storage === "server"){
     chip.className = "chip on";
     teks.textContent = "Tersimpan di server";
+  }else if(state.storage === "firebase"){
+    chip.className = "chip on";
+    teks.textContent = "Tersinkron" + (fbUser && fbUser.email ? " · " + fbUser.email : "");
   }else{
     chip.className = "chip";
     teks.textContent = "Tersimpan di perangkat ini";
   }
+}
+
+/* ---------- sinkronisasi Firebase (dipakai di luar viewer claude.ai) ---------- */
+var fb = null, fbAuth = null, fbUser = null, fbLepas = [];
+
+function firebaseSiap(){
+  return !!(window.firebase && window.FIREBASE_CONFIG &&
+            FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey.indexOf("GANTI") < 0);
+}
+function mulaiFirebase(){
+  try{
+    firebase.initializeApp(FIREBASE_CONFIG);
+    fbAuth = firebase.auth();
+    fb = firebase.firestore();
+  }catch(e){
+    toast("bad", "Firebase gagal disiapkan", (e && e.message) || "");
+    return Promise.resolve(false);
+  }
+  // simpan salinan luring supaya pemindaian tetap jalan saat sinyal putus
+  try{ fb.enablePersistence({synchronizeTabs:true}).catch(function(){}); }catch(e){}
+
+  return new Promise(function(res){
+    var pertama = true;
+    fbAuth.onAuthStateChanged(function(u){
+      fbUser = u || null;
+      fbLepas.forEach(function(f){ try{ f(); }catch(e){} });
+      fbLepas = [];
+      if(fbUser){
+        state.storage = "firebase";
+        pasangSnapshotFB();
+      }else{
+        state.storage = "lokal";
+        state.peserta = []; state.hari = {}; state.demo = true;
+      }
+      chipSimpan(); gambarUlang();
+      if(pertama){ pertama = false; res(true); }
+    });
+  });
+}
+function pasangSnapshotFB(){
+  fbLepas.push(fb.collection("peserta").onSnapshot(function(snap){
+    var arr = [];
+    snap.forEach(function(d){
+      var v = d.data() || {};
+      arr.push({kode: v.kode || d.id, nama: v.nama || "(tanpa nama)", grup: v.grup || ""});
+    });
+    state.peserta = arr;
+    if(arr.length) state.demo = false;
+    gambarUlang();
+  }, function(e){ toast("bad", "Gagal memuat peserta", (e && e.code) || ""); }));
+
+  fbLepas.push(fb.collection("absensi").orderBy("tanggal","desc").limit(60).onSnapshot(function(snap){
+    var map = {};
+    snap.forEach(function(d){
+      var v = d.data() || {};
+      map[d.id] = {tanggal: v.tanggal || d.id, catatan: v.catatan || {}};
+    });
+    state.hari = map;
+    gambarUlang();
+  }, function(e){ toast("bad", "Gagal memuat absensi", (e && e.code) || ""); }));
+
+  fbLepas.push(fb.doc("pengaturan/umum").onSnapshot(function(snap){
+    if(snap.exists){
+      var v = snap.data() || {};
+      if(v.jamMasuk) state.pengaturan.jamMasuk = v.jamMasuk;
+      if(v.toleransi != null) state.pengaturan.toleransi = v.toleransi;
+      gambarUlang();
+    }
+  }, function(){}));
+}
+function pesanAuth(kode){
+  var k = String(kode || "");
+  if(k.indexOf("api-key-not-valid") >= 0)
+    return "Konfigurasi Firebase belum benar. Periksa kembali isi firebase-config.js, terutama apiKey dan projectId.";
+  if(k.indexOf("configuration-not-found") >= 0)
+    return "Metode Email/Password belum diaktifkan. Buka Firebase Console → Authentication → Sign-in method, lalu aktifkan Email/Password.";
+  var p = {
+    "auth/invalid-email": "Format email tidak sah.",
+    "auth/user-not-found": "Akun dengan email itu belum terdaftar. Buat dulu di Firebase Console.",
+    "auth/wrong-password": "Kata sandi salah.",
+    "auth/invalid-credential": "Email atau kata sandi salah.",
+    "auth/too-many-requests": "Terlalu banyak percobaan. Tunggu beberapa menit.",
+    "auth/network-request-failed": "Tidak ada koneksi ke Firebase. Periksa jaringan.",
+    "auth/user-disabled": "Akun ini dinonaktifkan di Firebase Console."
+  };
+  return p[kode] || ("Gagal masuk (" + (kode || "tidak diketahui") + ").");
+}
+async function masukFirebase(email, sandi, tombol){
+  if(tombol) tombol.disabled = true;
+  try{
+    await fbAuth.signInWithEmailAndPassword(email, sandi);
+    toast("ok", "Berhasil masuk", email);
+  }catch(e){
+    var kotak = $("#pesanMasuk");
+    if(kotak) kotak.textContent = pesanAuth(e && e.code);
+  }finally{
+    if(tombol) tombol.disabled = false;
+  }
+}
+function keluarFirebase(){
+  if(fbAuth) fbAuth.signOut();
 }
 
 function pasangSnapshot(){
@@ -10520,6 +10642,8 @@ async function siapkanPenyimpanan(){
   }catch(e){ d = null; }
   if(d){
     db = d; state.storage = "server"; chipSimpan(); pasangSnapshot();
+  }else if(firebaseSiap()){
+    await mulaiFirebase();
   }else{
     state.storage = "lokal"; chipSimpan();
     var lokal = bacaLokal();
@@ -10550,6 +10674,9 @@ async function simpanPeserta(p){
   keluarDemo();
   if(db){
     await db.collection("peserta").doc(slug(p.kode)).set(p);
+  }else if(fb){
+    try{ await fb.collection("peserta").doc(slug(p.kode)).set(p); }
+    catch(e){ toast("bad", "Gagal menyimpan peserta", (e && e.code) || ""); }
   }else{
     state.peserta = state.peserta.filter(function(x){ return x.kode !== p.kode; }).concat([p]);
     tulisLokal(); gambarUlang();
@@ -10559,6 +10686,9 @@ async function hapusPeserta(kode){
   keluarDemo();
   if(db){
     await db.collection("peserta").doc(slug(kode)).delete();
+  }else if(fb){
+    try{ await fb.collection("peserta").doc(slug(kode)).delete(); }
+    catch(e){ toast("bad", "Gagal menghapus", (e && e.code) || ""); }
   }else{
     state.peserta = state.peserta.filter(function(x){ return x.kode !== kode; });
     tulisLokal(); gambarUlang();
@@ -10567,6 +10697,8 @@ async function hapusPeserta(kode){
 async function simpanPengaturan(){
   if(db){
     try{ await db.doc("pengaturan/umum").set(state.pengaturan); }catch(e){}
+  }else if(fb){
+    try{ await fb.doc("pengaturan/umum").set(state.pengaturan, {merge:true}); }catch(e){}
   }else{ tulisLokal(); }
 }
 async function tulisEntri(iso, kode, entri){
@@ -10588,6 +10720,12 @@ async function tulisEntri(iso, kode, entri){
         toast("bad", "Gagal menyimpan", (e && e.code) || "");
       }
     }
+  }else if(fb){
+    var isiFB = {tanggal: iso, catatan: {}};
+    isiFB.catatan[kode] = entri;
+    // merge menggabungkan peta bersarang, jadi satu panggilan cukup untuk buat maupun perbarui
+    try{ await fb.doc("absensi/"+iso).set(isiFB, {merge:true}); }
+    catch(e){ toast("bad", "Gagal menyimpan", (e && e.code) || ""); }
   }else{
     tulisLokal();
   }
@@ -10819,7 +10957,31 @@ function csvBaris(v){
 }
 
 /* ---------- render ---------- */
-function gambarUlang(){ renderBanner(); renderPanel(); }
+function gambarUlang(){ renderMasuk(); renderBanner(); renderPanel(); }
+
+function renderMasuk(){
+  var host = $("#masukHost");
+  if(!host) return;
+  var perlu = firebaseSiap() && fbAuth && !fbUser;
+  if(!perlu){ host.innerHTML = ""; return; }
+  if($("#formMasuk")) return;             // jangan bangun ulang saat sedang diketik
+  host.innerHTML =
+    '<div class="gerbang">' +
+      '<form class="sheet masuk" id="formMasuk">' +
+        '<div class="stamp besar">PR</div>' +
+        '<h2>Masuk ke Presensia</h2>' +
+        '<p class="hint">Data absensi tersimpan di Firebase dan tersinkron antar-perangkat. ' +
+          'Gunakan akun yang dibuat di Firebase Console.</p>' +
+        '<div class="field"><label for="mEmail">Email</label>' +
+          '<input id="mEmail" type="email" autocomplete="username" required></div>' +
+        '<div class="field"><label for="mSandi">Kata sandi</label>' +
+          '<input id="mSandi" type="password" autocomplete="current-password" required></div>' +
+        '<p class="pesan-masuk" id="pesanMasuk"></p>' +
+        '<button class="btn primary lebar" type="submit">Masuk</button>' +
+      '</form>' +
+    '</div>';
+  var e = $("#mEmail"); if(e) e.focus();
+}
 
 function renderBanner(){
   var b = $("#banner");
@@ -11140,6 +11302,24 @@ async function pulihkan(file){
     }catch(e){
       toast("bad", "Sebagian data gagal diunggah", (e && e.code) || "");
     }
+  }else if(fb){
+    try{
+      var tulis = fb.batch(), n = 0;
+      for(var a = 0; a < state.peserta.length; a++){
+        tulis.set(fb.collection("peserta").doc(slug(state.peserta[a].kode)), state.peserta[a]);
+        if(++n >= 400){ await tulis.commit(); tulis = fb.batch(); n = 0; }
+      }
+      var kk = Object.keys(state.hari);
+      for(var b = 0; b < kk.length; b++){
+        tulis.set(fb.doc("absensi/" + kk[b]),
+                  {tanggal: kk[b], catatan: state.hari[kk[b]].catatan || {}}, {merge:true});
+        if(++n >= 400){ await tulis.commit(); tulis = fb.batch(); n = 0; }
+      }
+      tulis.set(fb.doc("pengaturan/umum"), state.pengaturan, {merge:true});
+      await tulis.commit();
+    }catch(e){
+      toast("bad", "Sebagian data gagal diunggah", (e && e.code) || "");
+    }
   }else{
     tulisLokal();
   }
@@ -11239,6 +11419,7 @@ document.addEventListener("click", function(ev){
   }
   else if(act === "kosongkan"){ keluarDemo(); gambarUlang(); }
   else if(act === "cadangkan") cadangkan();
+  else if(act === "keluar"){ if(confirm("Keluar dari akun ini?")) keluarFirebase(); }
   else if(act === "qr")     bukaQR(t.dataset.kode);
   else if(act === "tutup")  tutupModal();
   else if(act === "qrUnduh") unduhQR(t.dataset.kode);
@@ -11267,6 +11448,12 @@ document.addEventListener("click", function(ev){
 });
 
 document.addEventListener("submit", function(ev){
+  if(ev.target.id === "formMasuk"){
+    ev.preventDefault();
+    $("#pesanMasuk").textContent = "";
+    masukFirebase($("#mEmail").value.trim(), $("#mSandi").value, ev.target.querySelector("button"));
+    return;
+  }
   if(ev.target.id !== "formPeserta") return;
   ev.preventDefault();
   var nama = $("#fNama").value.trim(), kode = $("#fKode").value.trim(), grup = $("#fGrup").value.trim();

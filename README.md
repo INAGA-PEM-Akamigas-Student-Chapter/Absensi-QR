@@ -1,8 +1,7 @@
 # Presensia — absensi kartu QR
 
-Aplikasi presensi berbasis pemindaian kode QR. Satu berkas HTML, tanpa pemasangan dan
-tanpa server: pemindai QR, pembuat kartu QR, rekap harian, dan ekspor CSV semuanya ada
-di dalam `index.html`.
+Aplikasi presensi berbasis pemindaian kode QR. Berjalan sepenuhnya di browser: pemindai
+QR, pembuat kartu QR, rekap harian, dan ekspor CSV.
 
 **Halaman langsung:** <https://radja4100.github.io/Absensi-QR/>
 
@@ -22,13 +21,84 @@ Status **hadir** atau **terlambat** dihitung dari aturan jam di tab Pindai
 
 ## Penyimpanan data
 
-Data disimpan di `localStorage` browser masing-masing pengunjung, pada kunci
-`presensia.v1`. Halaman ini tidak punya server dan tidak mengirim apa pun ke mana pun.
+Aplikasi memilih tempat simpan secara otomatis:
 
-Konsekuensinya: data melekat pada satu browser di satu perangkat, dan hilang bila data
-situs dibersihkan. Tab **Rekap** menyediakan **Cadangkan (JSON)** dan **Pulihkan dari
-berkas** — pakai secara berkala, terutama di iPhone, karena Safari menghapus data situs
-yang tidak dibuka selama tujuh hari.
+| Kondisi | Data disimpan di | Sinkron antar-perangkat |
+|---|---|---|
+| `firebase-config.js` sudah diisi dan Anda sudah masuk | Firestore | **ya, langsung** |
+| Belum dikonfigurasi | `localStorage` browser | tidak |
+
+Selama `firebase-config.js` masih berisi nilai `GANTI...`, aplikasi jalan normal dengan
+penyimpanan lokal dan **tanpa** layar masuk. Jadi mengaktifkan sinkronisasi sepenuhnya
+opsional.
+
+Apa pun modenya, tab **Rekap** menyediakan **Cadangkan (JSON)** dan **Pulihkan dari
+berkas**. Tetap cadangkan berkala — terutama bila memakai penyimpanan lokal di iPhone,
+karena Safari menghapus data situs yang tidak dibuka selama tujuh hari.
+
+## Mengaktifkan sinkronisasi HP ↔ laptop
+
+Sekali siapkan, berlaku untuk semua perangkat.
+
+### 1. Buat proyek Firebase
+
+<https://console.firebase.google.com> → **Add project** → beri nama, misalnya
+`absensi-qr`. Google Analytics boleh dimatikan.
+
+### 2. Buat basis data Firestore
+
+**Build → Firestore Database → Create database.** Pilih lokasi terdekat
+(`asia-southeast1` / Singapore untuk Indonesia). Mode awal bebas — aturannya kita ganti
+di langkah 4.
+
+### 3. Aktifkan login email
+
+**Build → Authentication → Get started → Email/Password → Enable → Save.**
+
+Lalu buat akun untuk diri Anda: tab **Users → Add user**, isi email dan kata sandi.
+Akun inilah yang dipakai masuk di HP maupun laptop.
+
+Supaya orang lain tidak bisa mendaftar sendiri: **Authentication → Settings → User
+actions**, hilangkan centang *Enable create (sign-up)*.
+
+### 4. Pasang aturan keamanan
+
+**Firestore Database → Rules**, ganti seluruh isinya dengan:
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
+```
+
+Klik **Publish**. Artinya: hanya pengguna yang sudah masuk yang boleh membaca dan
+menulis. Tanpa aturan ini, data absensi Anda terbuka untuk siapa pun.
+
+### 5. Salin konfigurasi ke repositori
+
+**Project settings** (ikon gerigi) → **Your apps** → **Web** (`</>`) → daftarkan
+aplikasi → salin isi objek `firebaseConfig`, lalu tempelkan ke `firebase-config.js` di
+repositori ini menggantikan nilai `GANTI...`. Commit dan push.
+
+Tunggu satu-dua menit sampai GitHub Pages membangun ulang, buka halamannya, lalu masuk
+dengan akun dari langkah 3. Setelah itu HP dan laptop melihat data yang sama, dan
+perubahan di satu perangkat langsung muncul di perangkat lain.
+
+### Struktur data di Firestore
+
+```
+peserta/<kode>          { kode, nama, grup }
+absensi/<YYYY-MM-DD>    { tanggal, catatan: { <kode>: { nama, grup, masuk, pulang, status } } }
+pengaturan/umum         { jamMasuk, toleransi }
+```
+
+Pemindaian tetap berfungsi saat sinyal putus — Firestore menyimpan salinan luring dan
+mengirimkannya begitu koneksi kembali.
 
 ## Kamera
 
@@ -39,7 +109,10 @@ berkasnya juga menawarkan "Ambil Foto".
 
 ## Catatan teknis
 
-`index.html` sengaja dibuat mandiri: pustaka [jsQR](https://github.com/cozmo/jsQR) (MIT)
-dan [QRious](https://github.com/neocotic/qrious) (GPL-3.0) ditanam di dalam berkas,
-sehingga tidak ada satu pun permintaan ke CDN yang bisa tertahan jaringan atau pemblokir
-iklan. Jangan pecah berkas ini menjadi `lib/` terpisah kecuali folder itu ikut diunggah.
+Semua pustaka disimpan di dalam repositori, tidak ada satu pun permintaan ke CDN:
+[jsQR](https://github.com/cozmo/jsQR) (MIT) dan
+[QRious](https://github.com/neocotic/qrious) (GPL-3.0) ditanam langsung di dalam
+`index.html`, sedangkan SDK Firebase ada di `vendor/`.
+
+`index.html` adalah hasil bangunan, bukan berkas yang diedit langsung. Sumbernya
+`presensia/index.html` beserta `presensia/bangun.py` di mesin pengembang.
