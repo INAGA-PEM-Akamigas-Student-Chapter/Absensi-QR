@@ -11299,6 +11299,32 @@ function bukuXLSX(lembar){
 
 /* Satu sumber baris untuk CSV maupun Excel, supaya isinya tidak pernah berbeda. */
 var KEPALA_REKAP = ["Tanggal","Kode","Nama","Kelas / Divisi","Jam Masuk","Jam Pulang","Status"];
+var KEPALA_PESERTA = ["Kode","Nama","Kelas / Divisi","Isi QR"];
+function barisPeserta(){
+  return daftarPeserta().map(function(p){
+    return [p.kode, p.nama, p.grup || "", "PRESENSI:" + p.kode];
+  });
+}
+function pesertaExcel(){
+  var ps = daftarPeserta(), hitung = {};
+  ps.forEach(function(p){
+    var g = p.grup || "(tanpa kelas)";
+    hitung[g] = (hitung[g] || 0) + 1;
+  });
+  var perGrup = Object.keys(hitung).sort(bandingAlami).map(function(g){ return [g, hitung[g]]; });
+  unduh("peserta-" + tglISO() + ".xlsx", bukuXLSX([
+    {
+      nama: "Peserta",
+      lebar: [14, 26, 22, 26],
+      baris: [KEPALA_PESERTA].concat(barisPeserta())
+    },
+    {
+      nama: "Per Kelas",
+      lebar: [26, 12],
+      baris: [["Kelas / Divisi", "Jumlah"]].concat(perGrup).concat([["Total peserta", ps.length]])
+    }
+  ]));
+}
 /* Urutan status yang bermakna, bukan alfabet: hadir, terlambat, lalu belum. */
 var PERINGKAT_STATUS = {"Hadir":0, "Terlambat":1, "Belum hadir":2};
 var KOLOM_REKAP = {kode:1, nama:2, grup:3, masuk:4, pulang:5, status:6};
@@ -11554,7 +11580,8 @@ function viewPeserta(){
     '<div class="card">' +
       '<div class="card-head"><h2>Daftar peserta</h2>' +
         '<span class="note">' + ps.length + ' orang</span>' +
-        (ps.length ? ' <button class="btn small" data-act="csvPeserta">' + IKON.unduh + 'Unduh daftar (CSV)</button>' : '') +
+        (ps.length ? ' <button class="btn small" data-act="xlsxPeserta">' + IKON.unduh + 'Unduh Excel</button>' +
+        ' <button class="btn small" data-act="csvPeserta">' + IKON.unduh + 'Unduh CSV</button>' : '') +
       '</div>' +
       (ps.length
         ? '<div class="tablewrap"><table><thead><tr>' +
@@ -11876,11 +11903,10 @@ document.addEventListener("click", function(ev){
     if(orang && confirm("Hapus " + orang.nama + " dari daftar peserta?")) hapusPeserta(kode);
   }
   else if(act === "csvPeserta"){
-    var baris = [["Kode","Nama","Kelas / divisi","Isi QR"]].concat(
-      daftarPeserta().map(function(p){ return [p.kode, p.nama, p.grup || "", "PRESENSI:" + p.kode]; })
-    ).map(function(r){ return r.map(csvBaris).join(","); }).join("\r\n");
-    unduh("peserta-presensi.csv", "﻿" + baris);
+    var baris = [KEPALA_PESERTA].concat(barisPeserta()).map(function(r){ return r.map(csvBaris).join(","); }).join("\r\n");
+    unduh("peserta-" + tglISO() + ".csv", "﻿" + baris);
   }
+  else if(act === "xlsxPeserta") pesertaExcel();
   else if(act === "xlsxRekap") rekapExcel();
   else if(act === "csvRekap"){
     var iso = state.tglRekap;
