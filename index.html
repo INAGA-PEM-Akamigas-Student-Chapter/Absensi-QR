@@ -10344,6 +10344,9 @@ td.act{text-align:right; white-space:nowrap}
 .sheet.masuk .field label{margin-bottom:1px}
 .pesan-masuk{margin:0; font-size:13px; color:var(--bad); min-height:1px; line-height:1.45}
 .pesan-masuk:empty{display:none}
+.hint.sisa{margin:0; padding-top:14px; border-top:1px solid var(--line)}
+.hint.sisa b{color:var(--ink); font-weight:600}
+.hint.sisa .btn{margin-top:11px}
 .btn.lebar{justify-content:center; width:100%; padding:10px 14px}
 
 .toasts{position:fixed; left:50%; transform:translateX(-50%); bottom:22px; z-index:80; display:flex; flex-direction:column; gap:8px; align-items:center; pointer-events:none}
@@ -10569,6 +10572,25 @@ function pasangSnapshotFB(){
       gambarUlang();
     }
   }, function(){}));
+}
+/* Data lama di perangkat ini tidak boleh terkunci di balik layar masuk:
+   tawarkan cadangannya, supaya bisa dipulihkan ke Firestore setelah masuk. */
+function adaDataLokal(){
+  var l = bacaLokal();
+  if(!l || !l.peserta || !l.peserta.length) return "";
+  return '<p class="hint sisa">Perangkat ini masih menyimpan <b>' + l.peserta.length +
+         ' peserta</b> dari sebelum sinkronisasi aktif. ' +
+         'Unduh cadangannya dulu, lalu setelah masuk pakai <b>Pulihkan dari berkas</b> ' +
+         'di tab Rekap untuk memindahkannya ke Firebase.' +
+         '<button class="btn small" type="button" data-act="cadangkanLokal">Cadangkan data lama (JSON)</button></p>';
+}
+function cadangkanLokal(){
+  var l = bacaLokal();
+  if(!l || !l.peserta || !l.peserta.length){ toast("warn", "Tidak ada data lama", ""); return; }
+  unduh("presensia-data-lama-" + tglISO() + ".json", JSON.stringify({
+    aplikasi: "presensia", versi: 1, dibuat: new Date().toISOString(),
+    peserta: l.peserta, hari: l.hari || {}, pengaturan: l.pengaturan || state.pengaturan
+  }, null, 2));
 }
 function pesanAuth(kode){
   var k = String(kode || "");
@@ -10978,6 +11000,7 @@ function renderMasuk(){
           '<input id="mSandi" type="password" autocomplete="current-password" required></div>' +
         '<p class="pesan-masuk" id="pesanMasuk"></p>' +
         '<button class="btn primary lebar" type="submit">Masuk</button>' +
+        adaDataLokal() +
       '</form>' +
     '</div>';
   var e = $("#mEmail"); if(e) e.focus();
@@ -11419,6 +11442,7 @@ document.addEventListener("click", function(ev){
   }
   else if(act === "kosongkan"){ keluarDemo(); gambarUlang(); }
   else if(act === "cadangkan") cadangkan();
+  else if(act === "cadangkanLokal") cadangkanLokal();
   else if(act === "keluar"){ if(confirm("Keluar dari akun ini?")) keluarFirebase(); }
   else if(act === "qr")     bukaQR(t.dataset.kode);
   else if(act === "tutup")  tutupModal();
