@@ -75,15 +75,24 @@ actions**, hilangkan centang *Enable create (sign-up)*.
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    function diizinkan() {
+      return request.auth != null
+          && request.auth.token.email in [
+               'email-anda@contoh.com'
+             ];
+    }
     match /{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if diizinkan();
     }
   }
 }
 ```
 
-Klik **Publish**. Artinya: hanya pengguna yang sudah masuk yang boleh membaca dan
-menulis. Tanpa aturan ini, data absensi Anda terbuka untuk siapa pun.
+Ganti `email-anda@contoh.com` dengan email akun dari langkah 3, lalu klik **Publish**.
+Untuk menambah petugas, tambahkan emailnya di dalam kurung siku dipisah koma.
+
+Daftar email ini penting: `request.auth != null` saja tidak cukup, karena berarti
+siapa pun yang berhasil membuat akun boleh membaca dan mengubah seluruh absensi.
 
 ### 5. Salin konfigurasi ke repositori
 
@@ -94,6 +103,44 @@ repositori ini menggantikan nilai `GANTI...`. Commit dan push.
 Tunggu satu-dua menit sampai GitHub Pages membangun ulang, buka halamannya, lalu masuk
 dengan akun dari langkah 3. Setelah itu HP dan laptop melihat data yang sama, dan
 perubahan di satu perangkat langsung muncul di perangkat lain.
+
+### 6. Kunci pendaftaran (WAJIB)
+
+Kunci API di `firebase-config.js` bersifat publik — setiap browser pengunjung
+menerimanya, dan itu memang rancangan Firebase. Menyembunyikannya tidak mungkin dan
+tidak perlu. Yang menjaga data adalah dua setelan berikut, dan keduanya harus dipasang:
+
+- **Authentication → Settings → User actions**, hilangkan centang
+  *Enable create (sign-up)*. Tanpa ini, siapa pun bisa membuat akun di proyek Anda
+  dengan memanggil API Firebase langsung, tanpa perlu menyentuh halaman ini.
+- **Rules** pada langkah 4 memakai daftar email, bukan sekadar `request.auth != null`.
+  Akun di luar daftar tetap ditolak walau berhasil masuk.
+
+Periksa juga **Authentication → Users** dan hapus akun yang bukan Anda buat.
+
+### 7. Firebase App Check (opsional, lapisan tambahan)
+
+App Check membuat Firebase menolak permintaan yang tidak datang dari halaman ini,
+bahkan bila penyerang memegang kunci API Anda.
+
+1. **App Check → Apps** → pilih aplikasi web → provider **reCAPTCHA v3**.
+2. Buat kunci reCAPTCHA v3 di <https://www.google.com/recaptcha/admin> dengan domain
+   `radja4100.github.io`. Tempel **secret key**-nya ke Firebase Console — secret key
+   tidak pernah masuk ke repositori ini.
+3. Salin **site key**-nya ke `APPCHECK_SITE_KEY` di `firebase-config.js`, lalu push.
+4. Buka halaman, masuk, pastikan semuanya masih normal. Di **App Check → APIs**,
+   biarkan status **Monitor** dulu dan tunggu sampai lalu lintas terlihat masuk
+   sebagai *verified*.
+5. Baru setelah itu tekan **Enforce** untuk **Cloud Firestore** dan
+   **Firebase Authentication**.
+
+Jangan membalik urutan langkah 3–5. Menyalakan *Enforce* sebelum site key terpasang
+akan membuat seluruh permintaan ditolak dan aplikasi berhenti bekerja.
+
+Perlu diketahui: App Check bergantung pada reCAPTCHA yang memanggil server Google. Bila
+jaringan Anda memblokir `google.com` atau `recaptcha.net`, token gagal terbit dan —
+setelah *Enforce* menyala — aplikasi berhenti berfungsi. Itulah sebabnya tahap
+**Monitor** ada.
 
 ### Struktur data di Firestore
 

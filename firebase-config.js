@@ -18,3 +18,15 @@ window.FIREBASE_CONFIG = {
   messagingSenderId: "621682440316",
   appId: "1:621682440316:web:057bb6016e9de6816531f9"
 };
+
+/* Firebase App Check -- lapisan tambahan (opsional).
+ *
+ * Isi dengan SITE KEY reCAPTCHA v3 dari Firebase Console -> App Check.
+ * Site key memang boleh publik; yang rahasia adalah SECRET KEY, dan itu hanya
+ * ditempel di Firebase Console, tidak pernah masuk ke berkas ini.
+ *
+ * Selama masih kosong, aplikasi berjalan normal tanpa App Check.
+ * PENTING: jangan aktifkan penegakan (Enforce) di Console sebelum nilai ini
+ * terisi dan halaman sudah diuji, karena permintaan tanpa token akan ditolak.
+ */
+window.APPCHECK_SITE_KEY = "";

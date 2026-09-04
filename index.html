@@ -10359,6 +10359,7 @@ img{max-width:100%}
 [hidden]{display:none !important}
 </style>
 <script src="vendor/firebase-app-compat.js"></script>
+<script src="vendor/firebase-app-check-compat.js"></script>
 <script src="vendor/firebase-auth-compat.js"></script>
 <script src="vendor/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
@@ -10512,9 +10513,25 @@ function firebaseSiap(){
   return !!(window.firebase && window.FIREBASE_CONFIG &&
             FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey.indexOf("GANTI") < 0);
 }
+/* App Check membuktikan bahwa permintaan datang dari aplikasi ini, bukan dari
+   skrip lain yang memakai kunci API yang sama. Harus aktif sebelum permintaan
+   pertama ke Auth maupun Firestore. Selama site key belum diisi, aplikasi jalan
+   seperti biasa -- jadi menyalakannya tidak pernah merusak apa pun. */
+function aktifkanAppCheck(){
+  var kunci = window.APPCHECK_SITE_KEY;
+  if(!kunci || !firebase.appCheck) return false;
+  try{
+    firebase.appCheck().activate(kunci, true);   // true = token diperbarui otomatis
+    return true;
+  }catch(e){
+    toast("warn", "App Check gagal aktif", (e && e.message) || "");
+    return false;
+  }
+}
 function mulaiFirebase(){
   try{
     firebase.initializeApp(FIREBASE_CONFIG);
+    aktifkanAppCheck();
     fbAuth = firebase.auth();
     fb = firebase.firestore();
   }catch(e){
@@ -10552,7 +10569,7 @@ function pasangSnapshotFB(){
     state.peserta = arr;
     if(arr.length) state.demo = false;
     gambarUlang();
-  }, function(e){ toast("bad", "Gagal memuat peserta", (e && e.code) || ""); }));
+  }, function(e){ toast("bad", "Gagal memuat peserta", pesanFirestore(e && e.code)); }));
 
   fbLepas.push(fb.collection("absensi").orderBy("tanggal","desc").limit(60).onSnapshot(function(snap){
     var map = {};
@@ -10562,7 +10579,7 @@ function pasangSnapshotFB(){
     });
     state.hari = map;
     gambarUlang();
-  }, function(e){ toast("bad", "Gagal memuat absensi", (e && e.code) || ""); }));
+  }, function(e){ toast("bad", "Gagal memuat absensi", pesanFirestore(e && e.code)); }));
 
   fbLepas.push(fb.doc("pengaturan/umum").onSnapshot(function(snap){
     if(snap.exists){
@@ -10592,10 +10609,21 @@ function cadangkanLokal(){
     peserta: l.peserta, hari: l.hari || {}, pengaturan: l.pengaturan || state.pengaturan
   }, null, 2));
 }
+function pesanFirestore(kode){
+  if(kode === "permission-denied"){
+    return window.APPCHECK_SITE_KEY
+      ? "Ditolak Firestore. Dua kemungkinan: email Anda belum ada di daftar izin pada Rules, atau App Check menolak permintaan ini."
+      : "Ditolak Firestore. Email Anda kemungkinan belum ada di daftar izin pada Rules.";
+  }
+  if(kode === "unavailable") return "Tidak ada koneksi ke Firestore. Data yang dipindai tersimpan luring dan terkirim saat koneksi kembali.";
+  return "Gagal memuat (" + (kode || "tidak diketahui") + ").";
+}
 function pesanAuth(kode){
   var k = String(kode || "");
   if(k.indexOf("api-key-not-valid") >= 0)
     return "Konfigurasi Firebase belum benar. Periksa kembali isi firebase-config.js, terutama apiKey dan projectId.";
+  if(k.indexOf("app-check") >= 0)
+    return "Permintaan ditolak App Check. Periksa site key reCAPTCHA di firebase-config.js, dan pastikan domain radja4100.github.io terdaftar pada kunci reCAPTCHA itu.";
   if(k.indexOf("configuration-not-found") >= 0)
     return "Metode Email/Password belum diaktifkan. Buka Firebase Console → Authentication → Sign-in method, lalu aktifkan Email/Password.";
   var p = {
