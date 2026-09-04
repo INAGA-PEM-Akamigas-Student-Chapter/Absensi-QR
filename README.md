@@ -91,10 +91,10 @@ service cloud.firestore {
     function kelola()  { return diizinkan() && punyaAkun() && hak().kelola  == true; }
     function penilai() { return diizinkan() && punyaAkun() && hak().penilai == true; }
 
-    // Semua akun yang diizinkan boleh memindai dan melihat
+    // Semua akun yang diizinkan boleh memindai, melihat, dan mengatur jam
     match /absensi/{tanggal} { allow read, write: if diizinkan(); }
     match /peserta/{kode}    { allow read: if diizinkan(); allow write: if kelola(); }
-    match /pengaturan/{doc}  { allow read: if diizinkan(); allow write: if kelola(); }
+    match /pengaturan/{doc}  { allow read, write: if diizinkan(); }
 
     // Hanya akun penilai
     match /evaluasi/{id}     { allow read, write: if penilai(); }
@@ -169,18 +169,23 @@ setelah *Enforce* menyala — aplikasi berhenti berfungsi. Itulah sebabnya tahap
 Aplikasi terbagi dua bagian: **Absensi QR** dan **Evaluasi Staff**. Hak diberikan lewat
 dua kolom pada dokumen `pengguna/<email>`, dan boleh dikombinasikan.
 
-| Akun | `kelola` | `penilai` | Pindai & lihat | Ubah peserta / aturan jam | Evaluasi staff |
-|---|---|---|---|---|---|
-| Petugas absensi | — | — | ya | — | — |
-| Penilai | — | `true` | ya | — | ya |
-| Pengelola | `true` | `true` | ya | ya | ya |
+| Akun | `kelola` | `penilai` | Pindai & lihat | Atur jam masuk | Ubah daftar peserta | Evaluasi staff |
+|---|---|---|---|---|---|---|
+| Petugas absensi | — | — | ya | ya | — | — |
+| Penilai | — | `true` | ya | ya | — | ya |
+| Pengelola | `true` | `true` | ya | ya | ya | ya |
 
 Email harus **tetap ada** di daftar `diizinkan()` pada Rules — itu pintu pertamanya.
 Dokumen `pengguna` hanya menambah hak di atas akses dasar tersebut.
 
 **Membuat akun petugas absensi:** cukup tambahkan emailnya ke daftar di Rules. Tanpa
-dokumen `pengguna`, akun itu bisa memindai dan melihat rekap, tetapi tidak dapat
-menambah, mengubah, atau menghapus peserta, dan tidak melihat bagian evaluasi.
+dokumen `pengguna`, akun itu bisa memindai, melihat rekap, dan mengatur jam masuk
+beserta toleransinya — tetapi tidak dapat menambah, mengubah, atau menghapus peserta,
+dan tidak melihat bagian evaluasi.
+
+Aturan jam sengaja terbuka untuk semua petugas: yang menjaga pintu di lapangan sering
+perlu menyesuaikannya saat acara dimajukan atau diundur, dan menunggu pengelola hanya
+akan menghambat.
 
 **Membuat akun penilai:** tambahkan emailnya ke daftar di Rules, lalu buat dokumen di
 **Firestore → koleksi `pengguna`** dengan Document ID berisi email itu:

@@ -12096,15 +12096,12 @@ function viewScan(){
         '<div class="card-head"><h2>Aturan jam</h2>' +
           '<span class="note">terlambat setelah ' + esc(batasTerlambat()) + '</span></div>' +
         '<div class="card-pad rows">' +
-          (bolehKelola()
-            ? '<div class="row-f"><label for="jamMasuk">Jam masuk</label>' +
-                '<input id="jamMasuk" type="time" value="' + esc(state.pengaturan.jamMasuk) + '"></div>' +
-              '<div class="row-f"><label for="toleransi">Toleransi (menit)</label>' +
-                '<input id="toleransi" type="number" min="0" max="120" value="' + esc(state.pengaturan.toleransi) + '"></div>'
-            : '<div class="row-f"><label>Jam masuk</label><span class="nilai">' + esc(state.pengaturan.jamMasuk) + '</span></div>' +
-              '<div class="row-f"><label>Toleransi</label><span class="nilai">' + esc(state.pengaturan.toleransi) + ' menit</span></div>') +
+          '<div class="row-f"><label for="jamMasuk">Jam masuk</label>' +
+            '<input id="jamMasuk" type="time" value="' + esc(state.pengaturan.jamMasuk) + '"></div>' +
+          '<div class="row-f"><label for="toleransi">Toleransi (menit)</label>' +
+            '<input id="toleransi" type="number" min="0" max="120" value="' + esc(state.pengaturan.toleransi) + '"></div>' +
           '<p class="hint">Pindaian setelah pukul ' + esc(batasTerlambat()) +
-            ' dicatat sebagai terlambat.' + (bolehKelola() ? '' : ' Hanya akun pengelola yang dapat mengubahnya.') + '</p>' +
+            ' dicatat sebagai terlambat.</p>' +
         '</div>' +
       '</div>' +
     '</div>' +
@@ -12291,7 +12288,7 @@ function viewPengaturan(){
         '<div class="row-f"><label>Peserta terdaftar</label><span class="nilai">' + daftarPeserta().length + '</span></div>' +
         '<div class="row-f"><label>Hari absensi tercatat</label><span class="nilai">' + jumlahHari() + '</span></div>' +
         '<div class="row-f"><label>Penyimpanan</label><span class="nilai">' + esc(simpanTeks) + '</span></div>' +
-        '<div class="row-f"><div><label>Kelola peserta &amp; aturan jam</label>' +
+        '<div class="row-f"><div><label>Kelola daftar peserta</label>' +
           (bolehKelola() ? '' :
             '<p class="hint m0">Tertutup. Pada Firebase, tambahkan kolom <b>kelola</b> bernilai ' +
             '<b>true</b> pada dokumen <b>pengguna/&lt;email Anda&gt;</b>.</p>') +
