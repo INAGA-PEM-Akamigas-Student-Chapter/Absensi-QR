@@ -10223,6 +10223,8 @@ header.top{background:var(--surface); border-bottom:1px solid var(--line); posit
 .pop-teks{min-width:0}
 .pop-surel{font-size:13.5px; font-weight:600; overflow-wrap:anywhere; line-height:1.3}
 .pop-status{font-size:12px; color:var(--ok); margin-top:2px}
+.pop-status.tolak{color:var(--bad)}
+.titik-sinkron.tolak{background:var(--bad)}
 .pop-akun .btn.lebar{justify-content:center}
 @media (max-width:600px){ .pop-akun{width:min(268px, calc(100vw - 28px))} }
 
@@ -11174,30 +11176,45 @@ function tulisLokal(){
   }catch(e){ /* penyimpanan penuh atau diblokir: data sesi ini tetap jalan */ }
 }
 
+/* Status akun harus jujur. Sebelumnya baris ini selalu berbunyi "Tersinkron
+   dengan Firebase" begitu akun masuk, sehingga penolakan Firestore tampak
+   seperti sinkronisasi yang sehat dengan data nol. Titik pada avatar ikut
+   memerah supaya keadaannya terbaca tanpa membuka menu. */
 function pasangAvatar(surel){
   var bungkus = $("#akunBungkus");
   if(!bungkus) return;
   var surelEl = $("#popSurel"); if(surelEl) surelEl.textContent = surel || "";
-  var statusEl = $("#popStatus"); if(statusEl) statusEl.textContent = "Tersinkron dengan Firebase";
+  var statusEl = $("#popStatus");
+  var titik = bungkus.querySelector(".titik-sinkron");
+  var tolak = state.ditolak;
+  if(statusEl){
+    statusEl.className = tolak ? "pop-status tolak" : "pop-status";
+    statusEl.textContent = tolak ? ("Data ditolak (" + tolak + ")") : "Tersinkron dengan Firebase";
+    statusEl.title = tolak ? pesanFirestore(tolak) : "";
+  }
+  if(titik) titik.className = tolak ? "titik-sinkron tolak" : "titik-sinkron";
   var tombol = $("#tombolAkun");
-  if(tombol) tombol.setAttribute("aria-label", "Menu akun " + (surel || ""));
+  if(tombol) tombol.setAttribute("aria-label",
+    "Menu akun " + (surel || "") + (tolak ? " — data ditolak" : ""));
 }
 
 function chipSimpan(){
   var chip = $("#simpanChip"), teks = $("#simpanTeks");
-  if(state.ditolak){
-    chip.className = "chip tolak";
-    teks.textContent = "Data tidak tersimpan";
-    chip.title = "Firestore menolak membaca data absensi (" + state.ditolak + "). " +
-                 "Pemindaian tidak akan tersimpan sampai email akun ini diizinkan pada aturan Firestore.";
-    return;
-  }
-  chip.title = "";
   var bungkus = $("#akunBungkus");
   var pakaiAvatar = (state.storage === "firebase" && fbUser && fbUser.email);
+  /* Keterlihatan ditata lebih dulu. Dulu cabang penolakan keluar sebelum baris
+     ini, jadi saat akun sudah masuk chip yang memerah itu tetap tersembunyi dan
+     penolakan tidak pernah sampai ke layar. */
   if(bungkus) bungkus.hidden = !pakaiAvatar;
   if(chip) chip.hidden = !!pakaiAvatar;
   if(pakaiAvatar){ pasangAvatar(fbUser.email); return; }
+  if(state.ditolak){
+    chip.className = "chip tolak";
+    teks.textContent = "Data ditolak";
+    chip.title = pesanFirestore(state.ditolak);
+    return;
+  }
+  chip.title = "";
   if(state.storage === "server"){
     chip.className = "chip on";
     teks.textContent = "Tersimpan di server";
@@ -11381,9 +11398,10 @@ function catatPenolakan(e){
 }
 function pesanFirestore(kode){
   if(kode === "permission-denied"){
-    return window.APPCHECK_SITE_KEY
-      ? "Ditolak Firestore. Periksa daftar email pada Rules — pastikan email Anda sudah menggantikan contoh 'email-anda@contoh.com'. Bila sudah benar, kemungkinan App Check yang menolak."
-      : "Ditolak Firestore. Periksa daftar email pada Rules — pastikan email Anda sudah menggantikan contoh 'email-anda@contoh.com'.";
+    var surel = (fbUser && fbUser.email) || "akun ini";
+    return "Firestore menolak permintaan dari " + surel + ". Tambahkan email itu ke daftar pada Rules, " +
+           "lalu buat dokumen pengguna/" + surel + " bila akun ini perlu hak kelola atau penilai." +
+           (window.APPCHECK_SITE_KEY ? " Bila emailnya sudah terdaftar, periksa App Check." : "");
   }
   if(kode === "unavailable") return "Tidak ada koneksi ke Firestore. Data yang dipindai tersimpan luring dan terkirim saat koneksi kembali.";
   return "Gagal memuat (" + (kode || "tidak diketahui") + ").";
