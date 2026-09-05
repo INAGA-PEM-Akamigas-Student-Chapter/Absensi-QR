@@ -10529,6 +10529,10 @@ td.nm{white-space:nowrap}
   font-variant-numeric:tabular-nums; line-height:1.1}
 .nilai-angka.ok{color:var(--ok)} .nilai-angka.warn{color:var(--warn)} .nilai-angka.bad{color:var(--bad)}
 .nilai-tgl{font-size:11px; color:var(--muted); text-align:center; line-height:1.25}
+.nilai-isi{min-width:0}
+.tanda-proker{display:inline-block; margin-bottom:5px; padding:2px 9px; border-radius:999px;
+  font-size:11.5px; font-weight:600; background:var(--accent-soft); color:var(--accent);
+  overflow-wrap:anywhere}
 .nilai-catatan{margin:0; font-size:13.5px; line-height:1.55; overflow-wrap:anywhere}
 textarea{width:100%; padding:8px 11px; border:1px solid var(--line-strong); border-radius:8px;
   background:var(--surface-2); color:inherit; font:inherit; resize:vertical}
@@ -10756,10 +10760,11 @@ function rataEvaluasi(kode){
   d.forEach(function(e){ jml += (+e.nilai || 0); });
   return Math.round(jml / d.length * 10) / 10;
 }
-async function simpanEvaluasi(kode, tanggal, nilai, catatan){
+async function simpanEvaluasi(kode, tanggal, nilai, catatan, proker){
   var rec = {
     id: idEvaluasi(kode), kode: kode, tanggal: tanggal,
     nilai: Math.max(0, Math.min(100, +nilai || 0)),
+    proker: String(proker || ""),
     catatan: String(catatan || ""), dibuat: new Date().toISOString()
   };
   state.evaluasi = state.evaluasi.concat([rec]);
@@ -11148,7 +11153,8 @@ function pasangSnapshotFB(){
     snap.forEach(function(d){
       var v = d.data() || {};
       arr.push({id: d.id, kode: v.kode || "", tanggal: v.tanggal || "",
-                nilai: +v.nilai || 0, catatan: v.catatan || "", dibuat: v.dibuat || ""});
+                nilai: +v.nilai || 0, proker: v.proker || "",
+                catatan: v.catatan || "", dibuat: v.dibuat || ""});
     });
     state.evaluasi = arr;
     gambarUlang();
@@ -11275,7 +11281,8 @@ function pasangSnapshot(){
     snap.docs.forEach(function(d){
       var v = d.data() || {};
       arr.push({id: d.id, kode: v.kode || "", tanggal: v.tanggal || "",
-                nilai: +v.nilai || 0, catatan: v.catatan || "", dibuat: v.dibuat || ""});
+                nilai: +v.nilai || 0, proker: v.proker || "",
+                catatan: v.catatan || "", dibuat: v.dibuat || ""});
     });
     state.evaluasi = arr;
     gambarUlang();
@@ -12407,6 +12414,11 @@ function viewPengaturan(){
   '</div>';
 }
 
+function daftarProker(){
+  var set = {};
+  state.evaluasi.forEach(function(e){ if(e.proker) set[e.proker] = true; });
+  return Object.keys(set).sort(bandingAlami);
+}
 function warnaNilai(n){
   return n >= 80 ? "ok" : n >= 60 ? "warn" : "bad";
 }
@@ -12467,7 +12479,10 @@ function viewEvaluasiDetail(p){
         '<span class="nilai-angka ' + warnaNilai(e.nilai) + '">' + e.nilai + '</span>' +
         '<span class="nilai-tgl">' + esc(tglPanjang(e.tanggal)) + '</span>' +
       '</div>' +
-      '<p class="nilai-catatan">' + (e.catatan ? esc(e.catatan) : '<span class="mini">tanpa catatan</span>') + '</p>' +
+      '<div class="nilai-isi">' +
+        (e.proker ? '<span class="tanda-proker">' + esc(e.proker) + '</span>' : '') +
+        '<p class="nilai-catatan">' + (e.catatan ? esc(e.catatan) : '<span class="mini">tanpa catatan</span>') + '</p>' +
+      '</div>' +
       '<button class="btn small danger" data-act="hapusEval" data-kode="' + esc(e.id) +
         '" title="Hapus penilaian" aria-label="Hapus penilaian ' + esc(e.tanggal) + '">' + IKON.hapus + '</button>' +
     '</li>';
@@ -12497,6 +12512,12 @@ function viewEvaluasiDetail(p){
               '<input id="eTanggal" type="date" value="' + tglISO() + '" required></div>' +
             '<div class="field"><label for="eNilai">Nilai (0–100)</label>' +
               '<input id="eNilai" type="number" min="0" max="100" required placeholder="85"></div>' +
+            '<div class="field span"><label for="eProker">Program kerja</label>' +
+              '<input id="eProker" list="daftarProker" autocomplete="off" ' +
+              'placeholder="Kegiatan yang dinilai, misalnya Kunjungan Lapangan Dieng"></div>' +
+            '<datalist id="daftarProker">' +
+              daftarProker().map(function(k){ return '<option value="' + esc(k) + '"></option>'; }).join("") +
+            '</datalist>' +
             '<div class="field span"><label for="eCatatan">Catatan</label>' +
               '<textarea id="eCatatan" rows="3" placeholder="Apa yang sudah baik dan apa yang perlu diperbaiki."></textarea></div>' +
             '<button class="btn primary span" type="submit">' + IKON.tambah + 'Simpan penilaian</button>' +
@@ -12947,9 +12968,10 @@ document.addEventListener("submit", function(ev){
     if(!state.bukaEval) return;
     var nilai = $("#eNilai").value;
     if(nilai === "") return;
-    simpanEvaluasi(state.bukaEval, $("#eTanggal").value || tglISO(), nilai, $("#eCatatan").value);
+    simpanEvaluasi(state.bukaEval, $("#eTanggal").value || tglISO(), nilai,
+                   $("#eCatatan").value, $("#eProker").value);
     toast("ok", "Penilaian tersimpan", "Tercatat anonim");
-    $("#eNilai").value = ""; $("#eCatatan").value = "";
+    $("#eNilai").value = ""; $("#eCatatan").value = ""; $("#eProker").value = "";
     return;
   }
   if(ev.target.id !== "formPeserta") return;

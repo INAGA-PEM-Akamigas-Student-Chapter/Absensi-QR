@@ -228,7 +228,12 @@ langsung terbaca tanpa perlu disunting satu per satu.
 Untuk jabatan yang tidak memakai penamaan itu, tersedia centang **Tandai staff** di form
 peserta sebagai penunjukan manual.
 
-Satu penilaian berisi tanggal, nilai 0–100, dan catatan. Penilaian boleh dibuat kapan
+Satu penilaian berisi tanggal, nilai 0–100, **program kerja**, dan catatan. Kolom program
+kerja menyimpan kegiatan yang dinilai, misalnya `Kunjungan Lapangan Dieng`; nama yang
+pernah dipakai muncul sebagai saran saat mengetik, sehingga penulisannya konsisten dan
+penilaian dari kegiatan yang sama mudah dibandingkan. Kolom ini boleh dikosongkan.
+
+Penilaian boleh dibuat kapan
 saja dan sebanyak yang diperlukan — **penilaian lama tidak pernah tertimpa**, sehingga
 riwayatnya terbaca seperti rapor: nilai per tanggal, beserta rata-ratanya.
 
@@ -241,7 +246,7 @@ siapa yang memberi nilai tertentu, termasuk oleh pemilik proyek.
 
 ```
 peserta/<kode>          { kode, nama, grup, staff, foto }   foto: data URI JPEG 160px, opsional
-evaluasi/<id>           { kode, tanggal, nilai, catatan, dibuat }   tanpa identitas penilai
+evaluasi/<id>           { kode, tanggal, nilai, proker, catatan, dibuat }   tanpa identitas penilai
 pengguna/<email>        { kelola, penilai }                          hanya dari Firebase Console
 absensi/<YYYY-MM-DD>    { tanggal, catatan: { <kode>: { nama, grup, masuk, pulang, status } } }
 pengaturan/umum         { jamMasuk, toleransi }
