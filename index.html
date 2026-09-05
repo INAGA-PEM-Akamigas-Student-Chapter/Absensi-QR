@@ -10801,6 +10801,7 @@ var state = {
   ditolak: null,                     // keterangan bila Firestore menolak membaca
   dariCache: false,                  // benar bila data terakhir berasal dari salinan lokal
   sinkronTerakhir: "",               // jam snapshot terakhir yang benar-benar dari server
+  sesiGagal: "",                     // kode galat bila tiket masuk tidak bisa diperbarui
   bukaEval: null,                    // kode peserta yang sedang dilihat riwayatnya
   fotoUntuk: null,                   // kode peserta yang fotonya sedang diganti
   bagian: "absensi",                 // "absensi" atau "evaluasi"
@@ -11208,6 +11209,10 @@ function pasangAvatar(surel){
    ditolak (aturan menolak), luring (server tak terjangkau, data dari salinan
    lokal), dan tersinkron. Sebelumnya luring tampil hijau seperti sehat. */
 function keadaanSinkron(){
+  if(state.ditolak && state.sesiGagal)
+    return {kelas: "tolak", teks: "Sesi berakhir — masuk ulang",
+            jelas: "Tiket masuk tidak bisa diperbarui (" + state.sesiGagal + "), jadi permintaan " +
+                   "sampai ke server tanpa identitas dan ditolak. Keluar dari akun lalu masuk lagi."};
   if(state.ditolak)
     return {kelas: "tolak", teks: "Data ditolak (" + state.ditolak + ")",
             jelas: pesanFirestore(state.ditolak)};
@@ -11343,6 +11348,7 @@ function pasangSnapshotFB(){
     });
     state.peserta = arr;
     state.ditolak = null;
+    state.sesiGagal = "";
     state.dariCache = !!(snap.metadata && snap.metadata.fromCache);
     if(!state.dariCache) state.sinkronTerakhir = jamHM(new Date());
     if(arr.length) state.demo = false;
@@ -11425,6 +11431,22 @@ function cadangkanLokal(){
 }
 /* Penolakan pembacaan adalah keadaan, bukan kejadian sesaat: satu keterangan
    tenang di atas halaman lebih berguna daripada munculan berulang tiap koleksi. */
+/* Penolakan bisa berarti dua hal yang obatnya berbeda: aturan Firestore memang
+   melarang email ini, atau tiket masuknya sudah tidak bisa diperbarui sehingga
+   permintaan sampai ke server tanpa identitas. Keduanya terbaca sama di layar,
+   jadi tiketnya diminta ulang sekali untuk memastikan yang mana. */
+var sedangPeriksaSesi = false;
+function periksaSesi(){
+  if(sedangPeriksaSesi || !fbUser || !fbUser.getIdToken) return;
+  sedangPeriksaSesi = true;
+  fbUser.getIdToken(true).then(function(){
+    state.sesiGagal = "";            // tiket masih bisa dibuat: berarti aturannya
+    sedangPeriksaSesi = false; chipSimpan();
+  }, function(err){
+    state.sesiGagal = (err && err.code) || "auth/gagal";
+    sedangPeriksaSesi = false; chipSimpan();
+  });
+}
 function catatPenolakan(e){
   var kode = e && e.code;
   // Luring bukan penolakan: Firestore menyusul sendiri saat koneksi kembali.
@@ -11432,6 +11454,7 @@ function catatPenolakan(e){
   // dengan sinkronisasi sehat kalau tidak ada yang melaporkannya.
   if(kode === "unavailable"){ state.ditolak = null; state.dariCache = true; }
   else state.ditolak = kode || null;
+  if(state.ditolak) periksaSesi();
   chipSimpan();
 }
 function pesanFirestore(kode){
