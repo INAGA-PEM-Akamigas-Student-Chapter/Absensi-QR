@@ -10559,6 +10559,7 @@ td.nm{white-space:nowrap}
 .tiang.p1 .alas{height:64px; background:var(--accent-soft); border-color:var(--accent)}
 .tiang.p2 .alas{height:44px}
 .tiang.p3 .alas{height:30px}
+.tiang-potong{font-size:11px; font-weight:600; color:var(--warn); line-height:1.2}
 .angka-pos{font-family:Archivo,sans-serif; font-weight:700; font-size:15px; color:var(--muted)}
 .tiang.p1 .angka-pos{color:var(--accent); font-size:18px}
 .tiang.kosong{opacity:.35}
@@ -10942,6 +10943,19 @@ function bacaSelesaiLokal(){
 function tulisSelesaiLokal(){
   try{ localStorage.setItem(LS_EVAL + ".selesai", JSON.stringify(state.selesai)); }catch(e){}
 }
+/* Keterlambatan ikut menekan nilai bulanan, tapi sedikit saja: satu poin per
+   keterlambatan dan paling banyak sepuluh poin, supaya kehadiran berpengaruh
+   tanpa menenggelamkan penilaian kerja. Nilainya tidak pernah jatuh di bawah nol. */
+var POTONG_TELAT = 1, POTONG_MAKS = 10;
+function telatBulan(kode, bulan){
+  var src = state.demo ? state.contohHari : state.hari, n = 0;
+  Object.keys(src).forEach(function(iso){
+    if(String(iso).slice(0, 7) !== bulan) return;
+    var r = ((src[iso] || {}).catatan || {})[kode];
+    if(r && r.masuk && r.status === "terlambat") n++;
+  });
+  return n;
+}
 function peringkatBulan(bulan){
   var staff = daftarStaff();
   return staff.map(function(p){
@@ -10950,10 +10964,14 @@ function peringkatBulan(bulan){
     });
     var jml = 0;
     d.forEach(function(e){ jml += (+e.nilai || 0); });
+    var murni = d.length ? Math.round(jml / d.length * 10) / 10 : null;
+    var telat = telatBulan(p.kode, bulan);
+    var potong = Math.min(telat * POTONG_TELAT, POTONG_MAKS);
     return {
       kode: p.kode, nama: p.nama, grup: p.grup, foto: p.foto,
       jumlah: d.length,
-      rata: d.length ? Math.round(jml / d.length * 10) / 10 : null
+      murni: murni, telat: telat, potong: potong,
+      rata: murni == null ? null : Math.max(0, Math.round((murni - potong) * 10) / 10)
     };
   }).filter(function(x){ return x.jumlah > 0; })
     .sort(function(a, b){
@@ -12725,6 +12743,7 @@ function kartuBulanan(){
       '<span class="tiang-grup">' + esc(x.grup || "\u2014") + '</span>' +
       (juara ? '<span class="tanda-juara">Best Staff</span>' : '') +
       angka(x) +
+      (x.potong ? '<span class="tiang-potong">\u2212' + x.potong + ' telat</span>' : '') +
       '<span class="alas"><span class="angka-pos">' + pos + '</span></span>' +
     '</div>';
   }).join("");
@@ -12733,7 +12752,8 @@ function kartuBulanan(){
     return '<li class="peringkat">' +
       '<span class="posisi">' + (i + 4) + '</span>' + avatarPeserta(x) +
       '<span class="nama-teks">' + esc(x.nama) +
-        '<span class="sub-grup">' + esc(x.grup || "\u2014") + ' \u00b7 ' + x.jumlah + ' penilaian</span></span>' +
+        '<span class="sub-grup">' + esc(x.grup || "\u2014") + ' \u00b7 ' + x.jumlah + ' penilaian' +
+          (x.potong ? ' \u00b7 \u2212' + x.potong + ' telat' : '') + '</span></span>' +
       '<span class="nilai-rata ' + warnaNilai(x.rata) + '">' + x.rata + '</span></li>';
   }).join("");
 
@@ -12772,6 +12792,10 @@ function kartuBulanan(){
       : '<div class="empty">' + IKON.kosong + '<b>Belum ada penilaian pada ' + esc(namaBulan(bulan)) + '</b>' +
         '<span>Podium tersusun sendiri begitu ada staff<br>yang dinilai pada bulan tersebut.</span></div>') +
     (sisa ? '<ul class="daftar-peringkat">' + sisa + '</ul>' : '') +
+    (urutan.length
+      ? '<p class="hint">Nilai bulanan adalah rata-rata penilaian dikurangi ' + POTONG_TELAT +
+        ' poin untuk setiap keterlambatan, paling banyak ' + POTONG_MAKS + ' poin.</p>'
+      : '') +
   '</div>';
 }
 
