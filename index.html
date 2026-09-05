@@ -12217,8 +12217,8 @@ function bukuXLSX(lembar){
 }
 
 /* Satu sumber baris untuk CSV maupun Excel, supaya isinya tidak pernah berbeda. */
-var KEPALA_REKAP = ["Tanggal","Kode","Nama","Kelas / Divisi","Jam Masuk","Jam Pulang","Status"];
-var KEPALA_PESERTA = ["Kode","Nama","Kelas / Divisi","Status","Isi QR"];
+var KEPALA_REKAP = ["Tanggal","Kode","Nama","Divisi / Jabatan","Jam Masuk","Jam Pulang","Status"];
+var KEPALA_PESERTA = ["Kode","Nama","Divisi / Jabatan","Status","Isi QR"];
 function barisPeserta(){
   return daftarPeserta().map(function(p){
     return [p.kode, p.nama, p.grup || "", apakahStaff(p) ? "Staff" : "Anggota", "PRESENSI:" + p.kode];
@@ -12227,7 +12227,7 @@ function barisPeserta(){
 function pesertaExcel(){
   var ps = daftarPeserta(), hitung = {};
   ps.forEach(function(p){
-    var g = p.grup || "(tanpa kelas)";
+    var g = p.grup || "(tanpa divisi)";
     hitung[g] = (hitung[g] || 0) + 1;
   });
   var perGrup = Object.keys(hitung).sort(bandingAlami).map(function(g){ return [g, hitung[g]]; });
@@ -12253,9 +12253,9 @@ function pesertaExcel(){
         barisPeserta().map(function(b){ return b.concat([""]); }))
     },
     {
-      nama: "Per Kelas",
+      nama: "Per Divisi",
       lebar: [26, 12],
-      baris: [["Kelas / Divisi", "Jumlah"]].concat(perGrup).concat([["Total peserta", ps.length]])
+      baris: [["Divisi / Jabatan", "Jumlah"]].concat(perGrup).concat([["Total peserta", ps.length]])
     }
   ]));
 }
@@ -12324,7 +12324,7 @@ function dasborExcel(){
     {
       nama: "Kehadiran",
       lebar: [12, 26, 22, 10, 10, 10, 12, 14],
-      baris: [["Kode","Nama","Kelas / Divisi","Hadir","Terlambat","Izin","Tidak hadir","Kehadiran (%)"]]
+      baris: [["Kode","Nama","Divisi / Jabatan","Hadir","Terlambat","Izin","Tidak hadir","Kehadiran (%)"]]
         .concat(st.map(function(s){
           return [s.kode, s.nama, s.grup, s.hadir, s.telat, s.izin, s.absen, s.persen];
         }))
@@ -12624,8 +12624,8 @@ function viewPeserta(){
             '<input id="fNama" required placeholder="Nama peserta"></div>' +
           '<div class="field"><label for="fKode">Kode / NIS</label>' +
             '<input id="fKode" required placeholder="2024-007"></div>' +
-          '<div class="field"><label for="fGrup">Kelas / divisi</label>' +
-            '<input id="fGrup" placeholder="XII IPA 1"></div>' +
+          '<div class="field"><label for="fGrup">Divisi / jabatan</label>' +
+            '<input id="fGrup" placeholder="Staff of Humas"></div>' +
           '<div class="field centang"><label for="fStaff">Status</label>' +
             '<label class="kotak"><input id="fStaff" type="checkbox">' +
             '<span>Tandai staff</span></label></div>' +
@@ -12643,7 +12643,7 @@ function viewPeserta(){
       '</div>' +
       (ps.length
         ? '<div class="tablewrap"><table><thead><tr>' +
-            th("Kode","kode") + th("Nama","nama") + th("Kelas / divisi","grup","kol-grup") +
+            th("Kode","kode") + th("Nama","nama") + th("Divisi / jabatan","grup","kol-grup") +
             '<th></th></tr></thead><tbody>' + rows + '</tbody></table></div>'
         : '<div class="empty">' + IKON.kosong + '<b>Belum ada peserta</b>' +
           '<span>Tambahkan lewat formulir di atas, lalu unduh dan cetak kartu QR-nya.</span></div>') +
@@ -12821,7 +12821,7 @@ function viewEvaluasi(){
       '<div class="card-head"><h2>Daftar staff</h2></div>' +
       (staff.length
         ? '<div class="tablewrap"><table><thead><tr>' +
-            '<th>Kode</th><th>Nama</th><th class="kol-grup">Kelas / divisi</th>' +
+            '<th>Kode</th><th>Nama</th><th class="kol-grup">Divisi / jabatan</th>' +
             '<th>Penilaian</th><th>Terakhir</th><th>Rata-rata</th><th></th>' +
           '</tr></thead><tbody>' + rows + '</tbody></table></div>'
         : '<div class="empty">' + IKON.kosong + '<b>Belum ada peserta bertanda Staff</b>' +
@@ -13050,7 +13050,7 @@ function viewDasbor(){
         '<span class="note">' + (r.pertemuan ? 'dari ' + r.pertemuan + ' pertemuan' : '') + '</span></div>' +
       (r.pertemuan
         ? '<div class="tablewrap"><table><thead><tr>' +
-            th("Kode","kode") + th("Nama","nama") + th("Kelas / divisi","grup","kol-grup") +
+            th("Kode","kode") + th("Nama","nama") + th("Divisi / jabatan","grup","kol-grup") +
             th("Hadir","hadir") + th("Telat","telat") + th("Izin","izin") +
             th("Absen","absen") + th("Kehadiran","persen") +
           '</tr></thead><tbody>' + rows + '</tbody></table></div>'
@@ -13099,7 +13099,7 @@ function viewRekap(){
       '<div class="card-head"><h2>Daftar absensi</h2><span class="note">' + ps.length + ' peserta terdaftar</span></div>' +
       (ps.length
         ? '<div class="tablewrap"><table><thead><tr>' +
-            th("Kode","kode") + th("Nama","nama") + th("Kelas / divisi","grup","kol-grup") +
+            th("Kode","kode") + th("Nama","nama") + th("Divisi / jabatan","grup","kol-grup") +
             th("Masuk","masuk") + th("Pulang","pulang") + th("Status","status") +
             '<th class="kol-aksi">Aksi</th>' +
             '</tr></thead><tbody>' + rows + '</tbody></table></div>'
