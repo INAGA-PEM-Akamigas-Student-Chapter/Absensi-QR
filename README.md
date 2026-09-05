@@ -239,6 +239,25 @@ Penilaian boleh dibuat kapan
 saja dan sebanyak yang diperlukan — **penilaian lama tidak pernah tertimpa**, sehingga
 riwayatnya terbaca seperti rapor: nilai per tanggal, beserta rata-ratanya.
 
+### Best Staff bulanan
+
+Di atas daftar staff ada kartu **Best Staff bulanan**. Pilih bulannya, dan peringkat
+tersusun dari **rata-rata penilaian pada bulan itu saja** — staff yang belum dinilai pada
+bulan tersebut tidak ikut diperingkat. Urutan seri dipecah oleh jumlah penilaian, lalu
+nama.
+
+Tekan **Pilih** untuk menetapkan pemenangnya. Staff yang pernah terpilih **tidak dapat
+dipilih lagi** pada bulan-bulan berikutnya; namanya tetap muncul di peringkat dengan
+tanda *pernah terpilih*, tetapi tombolnya berganti keterangan. Ini menyebar
+penghargaannya, bukan menumpuk pada satu orang.
+
+Bila justru ingin membolehkan pengulangan, nyalakan **Boleh terpilih lagi** pada kartu
+yang sama. Opsi itu tersimpan di server, jadi berlaku sama untuk semua penilai.
+
+Pemenang disimpan sebagai dokumen bertanda `jenis: "best"` di dalam koleksi `evaluasi`,
+sehingga aturan keamanan yang sudah ada langsung berlaku — tidak perlu menambah aturan
+baru. Pemenang dapat dibatalkan lewat tombol **Batalkan**.
+
 **Penilaian bersifat anonim.** Identitas penilai tidak disimpan sama sekali, bukan
 sekadar disembunyikan dari tampilan — dokumen `evaluasi` hanya memuat kode peserta,
 tanggal, nilai, catatan, dan waktu pembuatan. Konsekuensinya, tidak ada cara menelusuri
@@ -249,6 +268,7 @@ siapa yang memberi nilai tertentu, termasuk oleh pemilik proyek.
 ```
 peserta/<kode>          { kode, nama, grup, staff, foto }   foto: data URI JPEG 160px, opsional
 evaluasi/<id>           { kode, tanggal, nilai, proker, catatan, dibuat }   tanpa identitas penilai
+evaluasi/best__<YYYY-MM> { jenis: "best", bulan, kode, nama, nilai }        pemenang bulanan
 pengguna/<email>        { kelola, penilai }                          hanya dari Firebase Console
 absensi/<YYYY-MM-DD>    { tanggal, catatan: { <kode>: { nama, grup, masuk, pulang, status } } }
 pengaturan/umum         { jamMasuk, toleransi }

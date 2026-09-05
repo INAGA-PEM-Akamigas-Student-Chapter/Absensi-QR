@@ -10520,6 +10520,31 @@ td.nm{white-space:nowrap}
 }
 
 .judul-orang{font-size:16px !important; text-transform:none !important; letter-spacing:-.01em !important}
+.daftar-peringkat{list-style:none; margin:0; padding:0}
+.peringkat{display:flex; align-items:center; gap:11px; padding:10px 18px; border-bottom:1px solid var(--line)}
+.peringkat:last-child{border-bottom:0}
+.peringkat.juara{background:var(--accent-soft)}
+.posisi{font-family:"IBM Plex Mono",monospace; font-size:13px; color:var(--muted);
+  min-width:18px; text-align:right; font-variant-numeric:tabular-nums}
+.peringkat .nama-teks{flex:1; min-width:0}
+.peringkat .sub-grup{display:block; font-size:11.5px; color:var(--muted); font-weight:400; margin-top:1px}
+.nilai-rata{font-family:"IBM Plex Mono",monospace; font-size:16px; font-weight:600;
+  font-variant-numeric:tabular-nums}
+.nilai-rata.ok{color:var(--ok)} .nilai-rata.warn{color:var(--warn)} .nilai-rata.bad{color:var(--bad)}
+.tanda-juara{display:inline-block; padding:1px 8px; border-radius:999px; font-size:10.5px;
+  font-weight:600; letter-spacing:.03em; background:var(--accent); color:#fff}
+:root[data-theme="dark"] .tanda-juara{color:#08201d}
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]) .tanda-juara{color:#08201d} }
+.tanda-pernah{display:inline-block; padding:1px 8px; border-radius:999px; font-size:10.5px;
+  font-weight:600; background:var(--sunk); color:var(--muted)}
+.kunci{white-space:nowrap}
+.juara-kotak{display:flex; align-items:center; gap:14px; border-bottom:1px solid var(--line)}
+.juara-nama{font-family:Archivo,sans-serif; font-weight:700; font-size:17px}
+@media (max-width:560px){
+  .peringkat{flex-wrap:wrap; gap:9px}
+  .peringkat .nama-teks{flex:1 1 100%; order:3}
+  .peringkat .btn, .peringkat .kunci{order:4; margin-left:auto}
+}
 .daftar-nilai{list-style:none; margin:0; padding:0}
 .nilai-baris{display:grid; grid-template-columns:auto 1fr auto; gap:12px; align-items:start;
   padding:13px 18px; border-bottom:1px solid var(--line)}
@@ -10529,6 +10554,34 @@ td.nm{white-space:nowrap}
   font-variant-numeric:tabular-nums; line-height:1.1}
 .nilai-angka.ok{color:var(--ok)} .nilai-angka.warn{color:var(--warn)} .nilai-angka.bad{color:var(--bad)}
 .nilai-tgl{font-size:11px; color:var(--muted); text-align:center; line-height:1.25}
+.daftar-peringkat{list-style:none; margin:0; padding:0}
+.peringkat{display:flex; align-items:center; gap:11px; padding:11px 18px;
+  border-bottom:1px solid var(--line)}
+.peringkat:last-child{border-bottom:0}
+.peringkat.juara{background:var(--accent-soft)}
+.posisi{font-family:"IBM Plex Mono",monospace; font-size:13px; font-weight:600;
+  color:var(--muted); min-width:20px; text-align:right; font-variant-numeric:tabular-nums}
+.peringkat .nama-teks{flex:1; min-width:0}
+.peringkat .sub-grup{display:block; font-weight:400; font-size:12px; color:var(--muted); margin-top:1px}
+.nilai-rata{font-family:"IBM Plex Mono",monospace; font-size:17px; font-weight:600;
+  font-variant-numeric:tabular-nums}
+.nilai-rata.ok{color:var(--ok)} .nilai-rata.warn{color:var(--warn)} .nilai-rata.bad{color:var(--bad)}
+.tanda-juara{display:inline-block; padding:1px 8px; border-radius:999px; font-size:10.5px;
+  font-weight:600; letter-spacing:.03em; background:var(--accent); color:#fff}
+:root[data-theme="dark"] .tanda-juara{color:#08201d}
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]) .tanda-juara{color:#08201d} }
+.tanda-pernah{display:inline-block; padding:1px 8px; border-radius:999px; font-size:10.5px;
+  font-weight:600; background:var(--sunk); color:var(--muted)}
+.kunci{white-space:nowrap}
+.juara-kotak{display:flex; align-items:center; gap:14px; background:var(--surface-2);
+  border-bottom:1px solid var(--line)}
+.juara-nama{font-family:Archivo,sans-serif; font-weight:700; font-size:17px}
+@media (max-width:560px){
+  .peringkat{flex-wrap:wrap; gap:9px}
+  .peringkat .nama-teks{flex:1 1 auto}
+  .peringkat .btn, .peringkat .kunci{margin-left:auto}
+}
+
 .nilai-isi{min-width:0}
 .tanda-proker{display:inline-block; margin-bottom:5px; padding:2px 9px; border-radius:999px;
   font-size:11.5px; font-weight:600; background:var(--accent-soft); color:var(--accent);
@@ -10722,7 +10775,9 @@ var state = {
   periode: 30,                       // 7, 30, atau 0 untuk semua yang tercatat
   tampilan: {tema:"otomatis", suara:true},
   batasHari: 60,                     // berapa hari riwayat yang dimuat dari server
-  evaluasi: [],                      // {id, kode, tanggal, nilai, catatan, dibuat}
+  evaluasi: [],                      // {id, kode, tanggal, nilai, proker, catatan, dibuat}
+  best: {},                          // "YYYY-MM" -> {kode, nama, nilai}
+  bulanBest: null,                   // bulan yang sedang dilihat pada peringkat
   penilai: false,                    // boleh membuka bagian Evaluasi
   kelola: false,                     // boleh mengubah peserta dan aturan jam
   ditolak: null,                     // keterangan bila Firestore menolak membaca
@@ -10860,6 +10915,78 @@ async function simpanFoto(kode, dataURI){
 function apakahStaff(p){
   return !!p.staff || /^\s*staff\b/i.test(String(p.grup || ""));
 }
+/* ---------- best staff bulanan ----------
+   Peringkat dihitung dari rata-rata penilaian pada bulan itu saja. Yang pernah
+   terpilih tidak dapat dipilih lagi, kecuali opsi pengulangan dinyalakan. */
+function bulanIni(){ return tglISO().slice(0, 7); }
+function namaBulan(b){
+  var p = String(b || "").split("-");
+  if(p.length < 2) return b || "";
+  return BULAN[(+p[1]) - 1] + " " + p[0];
+}
+function bacaBestLokal(){
+  try{ return JSON.parse(localStorage.getItem(LS_EVAL + ".best") || "{}") || {}; }catch(e){ return {}; }
+}
+function tulisBestLokal(){
+  try{ localStorage.setItem(LS_EVAL + ".best", JSON.stringify(state.best)); }catch(e){}
+}
+function peringkatBulan(bulan){
+  var staff = daftarStaff();
+  return staff.map(function(p){
+    var d = state.evaluasi.filter(function(e){
+      return e.kode === p.kode && String(e.tanggal || "").slice(0, 7) === bulan;
+    });
+    var jml = 0;
+    d.forEach(function(e){ jml += (+e.nilai || 0); });
+    return {
+      kode: p.kode, nama: p.nama, grup: p.grup, foto: p.foto,
+      jumlah: d.length,
+      rata: d.length ? Math.round(jml / d.length * 10) / 10 : null
+    };
+  }).filter(function(x){ return x.jumlah > 0; })
+    .sort(function(a, b){
+      if(b.rata !== a.rata) return b.rata - a.rata;
+      if(b.jumlah !== a.jumlah) return b.jumlah - a.jumlah;
+      return bandingAlami(a.nama, b.nama);
+    });
+}
+function pernahMenang(kode, kecualiBulan){
+  return Object.keys(state.best).some(function(b){
+    return b !== kecualiBulan && state.best[b].kode === kode;
+  });
+}
+function bolehDipilih(kode, bulan){
+  return state.pengaturan.ulangBest === true || !pernahMenang(kode, bulan);
+}
+async function simpanBest(bulan, orang){
+  var rec = {id: "best__" + bulan, jenis: "best", bulan: bulan,
+             kode: orang.kode, nama: orang.nama, nilai: orang.rata,
+             dibuat: new Date().toISOString()};
+  var salin = Object.assign({}, state.best);
+  salin[bulan] = rec;
+  state.best = salin;
+  if(db){
+    try{ await db.collection("evaluasi").doc(rec.id).set(rec); }
+    catch(e){ toast("bad", "Gagal menyimpan", (e && e.code) || ""); }
+  }else if(fb){
+    try{ await fb.collection("evaluasi").doc(rec.id).set(rec); }
+    catch(e){ toast("bad", "Gagal menyimpan", pesanFirestore(e && e.code)); }
+  }else{
+    tulisBestLokal();
+  }
+  gambarUlang();
+}
+async function hapusBest(bulan){
+  var id = (state.best[bulan] && state.best[bulan].id) || ("best__" + bulan);
+  var salin = Object.assign({}, state.best);
+  delete salin[bulan];
+  state.best = salin;
+  if(db){ try{ await db.collection("evaluasi").doc(id).delete(); }catch(e){} }
+  else if(fb){ try{ await fb.collection("evaluasi").doc(id).delete(); }catch(e){} }
+  else{ tulisBestLokal(); }
+  gambarUlang();
+}
+
 function daftarStaff(){
   return daftarPeserta().filter(apakahStaff);
 }
@@ -11149,14 +11276,20 @@ function pasangSnapshotFB(){
   }, function(e){ catatPenolakan(e); }));
 
   fbLepas.push(fb.collection("evaluasi").onSnapshot(function(snap){
-    var arr = [];
+    var arr = [], best = {};
     snap.forEach(function(d){
       var v = d.data() || {};
-      arr.push({id: d.id, kode: v.kode || "", tanggal: v.tanggal || "",
-                nilai: +v.nilai || 0, proker: v.proker || "",
-                catatan: v.catatan || "", dibuat: v.dibuat || ""});
+      if(v.jenis === "best"){
+        best[v.bulan || d.id] = {id: d.id, bulan: v.bulan || "", kode: v.kode || "",
+                                 nama: v.nama || "", nilai: +v.nilai || 0};
+      }else{
+        arr.push({id: d.id, kode: v.kode || "", tanggal: v.tanggal || "",
+                  nilai: +v.nilai || 0, proker: v.proker || "",
+                  catatan: v.catatan || "", dibuat: v.dibuat || ""});
+      }
     });
     state.evaluasi = arr;
+    state.best = best;
     gambarUlang();
   }, function(e){
     state.evaluasi = [];
@@ -11179,6 +11312,7 @@ function pasangSnapshotFB(){
       var v = snap.data() || {};
       if(v.jamMasuk) state.pengaturan.jamMasuk = v.jamMasuk;
       if(v.toleransi != null) state.pengaturan.toleransi = v.toleransi;
+      state.pengaturan.ulangBest = v.ulangBest === true;
       gambarUlang();
     }
   }, function(){}));
@@ -11277,22 +11411,29 @@ function pasangSnapshot(){
   }, function(err){ catatPenolakan(err); });
 
   db.collection("evaluasi").onSnapshot(function(snap){
-    var arr = [];
+    var arr = [], best = {};
     snap.docs.forEach(function(d){
       var v = d.data() || {};
-      arr.push({id: d.id, kode: v.kode || "", tanggal: v.tanggal || "",
-                nilai: +v.nilai || 0, proker: v.proker || "",
-                catatan: v.catatan || "", dibuat: v.dibuat || ""});
+      if(v.jenis === "best"){
+        best[v.bulan || d.id] = {id: d.id, bulan: v.bulan || "", kode: v.kode || "",
+                                 nama: v.nama || "", nilai: +v.nilai || 0};
+      }else{
+        arr.push({id: d.id, kode: v.kode || "", tanggal: v.tanggal || "",
+                  nilai: +v.nilai || 0, proker: v.proker || "",
+                  catatan: v.catatan || "", dibuat: v.dibuat || ""});
+      }
     });
     state.evaluasi = arr;
+    state.best = best;
     gambarUlang();
-  }, function(){ state.evaluasi = []; });
+  }, function(){ state.evaluasi = []; state.best = {}; });
 
   db.doc("pengaturan/umum").onSnapshot(function(snap){
     if(snap.exists){
       var v = snap.data() || {};
       if(v.jamMasuk) state.pengaturan.jamMasuk = v.jamMasuk;
       if(v.toleransi != null) state.pengaturan.toleransi = v.toleransi;
+      state.pengaturan.ulangBest = v.ulangBest === true;
       gambarUlang();
     }
   }, function(){});
@@ -11319,6 +11460,7 @@ async function siapkanPenyimpanan(){
       state.demo = false;
     }
     state.evaluasi = bacaEvalLokal();
+    state.best = bacaBestLokal();
     state.penilai = true; state.kelola = true;   // tanpa akun, tidak ada yang perlu dibatasi
     gambarUlang();
   }
@@ -12449,6 +12591,7 @@ function viewEvaluasi(){
 
   return '' +
   '<div class="col">' +
+    kartuBest() +
     '<div class="card">' +
       '<div class="card-head"><h2>Evaluasi staff</h2>' +
         '<span class="note">' + staff.length + ' staff · ' + state.evaluasi.length + ' penilaian tersimpan</span></div>' +
@@ -12468,6 +12611,60 @@ function viewEvaluasi(){
         : '<div class="empty">' + IKON.kosong + '<b>Belum ada peserta bertanda Staff</b>' +
           '<span>Buka tab Peserta, lalu centang <b>Staff</b> pada mereka yang perlu dievaluasi.</span></div>') +
     '</div>' +
+  '</div>';
+}
+
+function kartuBest(){
+  var bulan = state.bulanBest || bulanIni();
+  var urut = peringkatBulan(bulan);
+  var juara = state.best[bulan] || null;
+  var ulang = state.pengaturan.ulangBest === true;
+
+  var baris = urut.slice(0, 10).map(function(x, i){
+    var menang = juara && juara.kode === x.kode;
+    var terkunci = !bolehDipilih(x.kode, bulan);
+    return '<li class="peringkat' + (menang ? " juara" : "") + '">' +
+      '<span class="posisi">' + (i + 1) + '</span>' +
+      avatarPeserta(x) +
+      '<span class="nama-teks">' + esc(x.nama) +
+        (menang ? ' <span class="tanda-juara">Best Staff</span>' : '') +
+        (terkunci && !menang ? ' <span class="tanda-pernah">pernah terpilih</span>' : '') +
+        '<span class="sub-grup">' + esc(x.grup || "—") + ' · ' + x.jumlah + ' penilaian</span></span>' +
+      '<span class="nilai-rata ' + warnaNilai(x.rata) + '">' + x.rata + '</span>' +
+      (menang
+        ? '<button class="btn small" data-act="batalBest" data-kode="' + esc(bulan) + '">Batalkan</button>'
+        : terkunci
+          ? '<span class="mini kunci">tidak dapat dipilih</span>'
+          : '<button class="btn small primary" data-act="pilihBest" data-kode="' + esc(x.kode) + '">Pilih</button>') +
+    '</li>';
+  }).join("");
+
+  return '' +
+  '<div class="card">' +
+    '<div class="card-head"><h2>Best Staff bulanan</h2>' +
+      '<span class="note">' + esc(namaBulan(bulan)) + '</span></div>' +
+    '<div class="rekapbar">' +
+      '<label for="bulanBest" class="mini">Bulan</label>' +
+      '<input type="month" id="bulanBest" value="' + esc(bulan) + '">' +
+      '<label class="kotak push"><input type="checkbox" id="ulangBest"' + (ulang ? " checked" : "") + '>' +
+        '<span>Boleh terpilih lagi</span></label>' +
+    '</div>' +
+    (juara
+      ? '<div class="card-pad juara-kotak">' + avatarPeserta(juara.kode ? {nama:juara.nama, kode:juara.kode,
+          foto:(daftarPeserta().filter(function(q){ return q.kode === juara.kode; })[0] || {}).foto} : {nama:juara.nama}, "besar") +
+        '<div><div class="juara-nama">' + esc(juara.nama) + '</div>' +
+        '<div class="mini">Best Staff ' + esc(namaBulan(bulan)) + ' · rata-rata ' + juara.nilai + '</div></div></div>'
+      : '') +
+    (urut.length
+      ? '<ul class="daftar-peringkat">' + baris + '</ul>'
+      : '<div class="empty">' + IKON.kosong + '<b>Belum ada penilaian pada ' + esc(namaBulan(bulan)) + '</b>' +
+        '<span>Peringkat muncul setelah ada staff yang dinilai pada bulan tersebut.</span></div>') +
+    '<div class="card-pad"><p class="hint m0">' +
+      (ulang
+        ? 'Pengulangan dinyalakan: staff yang pernah terpilih tetap dapat dipilih lagi.'
+        : 'Staff yang pernah terpilih tidak dapat dipilih lagi pada bulan berikutnya. ' +
+          'Nyalakan “Boleh terpilih lagi” bila ingin membolehkannya.') +
+    '</p></div>' +
   '</div>';
 }
 
@@ -12917,6 +13114,32 @@ document.addEventListener("click", function(ev){
     }
     $("#fileFoto").click();
   }
+  else if(act === "pilihBest"){
+    var bln = state.bulanBest || bulanIni();
+    var orang = peringkatBulan(bln).filter(function(x){ return x.kode === t.dataset.kode; })[0];
+    if(!orang) return;
+    if(state.best[bln] && state.best[bln].kode !== orang.kode &&
+       !confirm("Best Staff " + namaBulan(bln) + " sudah ditetapkan atas nama " +
+                state.best[bln].nama + ". Ganti dengan " + orang.nama + "?")) return;
+    simpanBest(bln, orang);
+    toast("ok", "Best Staff " + namaBulan(bln), orang.nama);
+  }
+  else if(act === "batalBest"){
+    var b = t.dataset.kode;
+    if(confirm("Batalkan Best Staff " + namaBulan(b) + "?")) hapusBest(b);
+  }
+  else if(act === "pilihBest"){
+    var bln = state.bulanBest || bulanIni();
+    var calon = peringkatBulan(bln).filter(function(x){ return x.kode === t.dataset.kode; })[0];
+    if(!calon) return;
+    if(state.best[bln] && !confirm("Ganti Best Staff " + namaBulan(bln) + " menjadi " + calon.nama + "?")) return;
+    simpanBest(bln, calon);
+    toast("ok", "Best Staff ditetapkan", calon.nama + " · " + namaBulan(bln));
+  }
+  else if(act === "batalBest"){
+    var b2 = t.dataset.kode;
+    if(confirm("Batalkan Best Staff " + namaBulan(b2) + "?")) hapusBest(b2);
+  }
   else if(act === "bukaEval"){ state.bukaEval = t.dataset.kode; gambarUlang(); window.scrollTo(0,0); }
   else if(act === "tutupEval"){ state.bukaEval = null; gambarUlang(); window.scrollTo(0,0); }
   else if(act === "hapusEval"){
@@ -13007,6 +13230,24 @@ document.addEventListener("keydown", function(ev){
 
 document.addEventListener("change", function(ev){
   var id = ev.target.id;
+  if(id === "bulanBest"){ state.bulanBest = ev.target.value || bulanIni(); gambarUlang(); return; }
+  if(id === "ulangBest"){
+    state.pengaturan.ulangBest = ev.target.checked;
+    simpanPengaturan();
+    gambarUlang();
+    return;
+  }
+  if(id === "bulanBest"){
+    state.bulanBest = ev.target.value || bulanIni();
+    gambarUlang();
+    return;
+  }
+  if(id === "ulangBest"){
+    state.pengaturan.ulangBest = ev.target.checked;
+    simpanPengaturan();
+    gambarUlang();
+    return;
+  }
   if(id === "fileFoto"){
     var berkas = ev.target.files && ev.target.files[0];
     ev.target.value = "";
