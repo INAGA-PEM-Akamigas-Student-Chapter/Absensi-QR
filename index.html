@@ -12563,25 +12563,6 @@ function viewPengaturan(){
           '<label class="btn" for="filePulih">Pulihkan dari berkas</label>' +
           '<input id="filePulih" class="sr" type="file" accept=".json,application/json">' +
         '</div>' +
-      '</div>' +
-    '</div>' +
-
-    '<div class="card">' +
-      '<div class="card-head"><h2>Tentang</h2></div>' +
-      '<div class="card-pad rows">' +
-        '<div class="row-f"><label>Peserta terdaftar</label><span class="nilai">' + daftarPeserta().length + '</span></div>' +
-        '<div class="row-f"><label>Hari absensi tercatat</label><span class="nilai">' + jumlahHari() + '</span></div>' +
-        '<div class="row-f"><label>Penyimpanan</label><span class="nilai">' + esc(simpanTeks) + '</span></div>' +
-        '<div class="row-f"><div><label>Kelola daftar peserta</label>' +
-          (bolehKelola() ? '' :
-            '<p class="hint m0">Tertutup. Pada Firebase, tambahkan kolom <b>kelola</b> bernilai ' +
-            '<b>true</b> pada dokumen <b>pengguna/&lt;email Anda&gt;</b>.</p>') +
-          '</div><span class="nilai">' + (bolehKelola() ? "terbuka" : "tertutup") + '</span></div>' +
-        '<div class="row-f"><div><label>Akses evaluasi staff</label>' +
-          (state.penilai ? '' :
-            '<p class="hint m0">Tertutup. Pada Firebase, tambahkan kolom <b>penilai</b> bernilai ' +
-            '<b>true</b> pada dokumen <b>pengguna/&lt;email Anda&gt;</b>.</p>') +
-          '</div><span class="nilai">' + (state.penilai ? "terbuka" : "tertutup") + '</span></div>' +
         (state.storage === "lokal"
           ? '<div class="row-f"><div><label>Hapus data di perangkat ini</label>' +
               '<p class="hint m0">Menghapus seluruh peserta dan absensi yang tersimpan di browser ini. Tidak dapat dibatalkan — cadangkan dulu.</p></div>' +

@@ -214,8 +214,6 @@ Kolom `kelola` dan `penilai` sengaja tidak dapat ditulis dari aplikasi
 Penyembunyian tombol di aplikasi hanya kenyamanan tampilan; aturan di atas yang
 benar-benar menahan.
 
-Status hak akun yang sedang masuk terlihat di **Pengaturan → Tentang**.
-
 ## Evaluasi staff
 
 Aplikasi terbagi dua tab besar di bagian atas: **Absensi QR** dan **Evaluasi Staff**.
