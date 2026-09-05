@@ -11675,6 +11675,39 @@ async function hapusPeserta(kode){
     tulisLokal(); gambarUlang();
   }
 }
+/* Mengosongkan seluruh riwayat pertemuan. Peserta dan penilaian tidak disentuh.
+   Untuk Firestore koleksinya dibaca langsung, bukan dari state.hari, karena
+   state hanya memuat sebanyak batasHari terakhir dan sisanya akan tertinggal. */
+async function hapusSemuaPertemuan(){
+  if(fb){
+    try{
+      var snap = await fb.collection("absensi").get();
+      var tulis = fb.batch(), n = 0;
+      for(var i = 0; i < snap.docs.length; i++){
+        tulis.delete(snap.docs[i].ref);
+        if(++n >= 400){ await tulis.commit(); tulis = fb.batch(); n = 0; }
+      }
+      if(n) await tulis.commit();
+    }catch(e){
+      toast("bad", "Gagal menghapus pertemuan", pesanFirestore(e && e.code));
+      return false;
+    }
+  }else if(db){
+    var kunci = Object.keys(state.hari);
+    try{
+      var s = await db.collection("absensi").get();
+      var dok = (s && (s.docs || s)) || [];
+      kunci = dok.map(function(d){ return d.id; });
+    }catch(e){ /* API tanpa get(): pakai tanggal yang sedang termuat */ }
+    for(var j = 0; j < kunci.length; j++){
+      try{ await db.collection("absensi").doc(kunci[j]).delete(); }catch(e2){}
+    }
+  }
+  state.hari = {}; state.log = [];
+  if(!db && !fb) tulisLokal();
+  gambarUlang();
+  return true;
+}
 async function simpanPengaturan(){
   if(db){
     try{ await db.doc("pengaturan/umum").set(state.pengaturan); }catch(e){}
@@ -12700,6 +12733,13 @@ function viewPengaturan(){
           '<label class="btn" for="filePulih">Pulihkan dari berkas</label>' +
           '<input id="filePulih" class="sr" type="file" accept=".json,application/json">' +
         '</div>' +
+        (bolehKelola()
+          ? '<div class="row-f"><div><label>Hapus semua pertemuan</label>' +
+              '<p class="hint m0">Mengosongkan riwayat absensi di seluruh tanggal. ' +
+              'Daftar peserta dan penilaian staff tidak ikut terhapus. ' +
+              'Tidak dapat dibatalkan — cadangkan dulu.</p></div>' +
+              '<button class="btn danger" data-act="hapusPertemuan">Hapus</button></div>'
+          : '') +
         (state.storage === "lokal"
           ? '<div class="row-f"><div><label>Hapus data di perangkat ini</label>' +
               '<p class="hint m0">Menghapus seluruh peserta dan absensi yang tersimpan di browser ini. Tidak dapat dibatalkan — cadangkan dulu.</p></div>' +
@@ -13322,6 +13362,17 @@ document.addEventListener("click", function(ev){
     if(confirm("Hapus penilaian ini? Riwayat yang sudah tersimpan akan berkurang.")) hapusEvaluasi(t.dataset.kode);
   }
   else if(act === "cadangkan") cadangkan();
+  else if(act === "hapusPertemuan"){
+    // Dua kali bertanya, karena yang hilang di sini tidak bisa dipulihkan
+    // kecuali dari berkas cadangan.
+    if(!confirm("Hapus SELURUH riwayat pertemuan?" + String.fromCharCode(10,10) +
+        "Daftar peserta dan penilaian staff tidak terhapus.")) return;
+    if(!confirm("Sekali lagi: absensi di semua tanggal akan hilang permanen." +
+        String.fromCharCode(10,10) + "Lanjutkan?")) return;
+    hapusSemuaPertemuan().then(function(ok){
+      if(ok) toast("ok", "Riwayat pertemuan dihapus", "Daftar peserta tetap utuh.");
+    });
+  }
   else if(act === "hapusSemua"){
     if(confirm("Hapus SELURUH peserta dan absensi yang tersimpan di perangkat ini?" + String.fromCharCode(10,10) + "Tindakan ini tidak dapat dibatalkan.")){
       try{ localStorage.removeItem(LS); }catch(e){}
