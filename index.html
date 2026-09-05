@@ -13461,8 +13461,7 @@ document.addEventListener("submit", function(ev){
     if(nilai === "") return;
     var catatan = $("#eCatatan").value.trim();
     if(!catatan){
-      toast("warn", "Catatan wajib diisi",
-            "Tuliskan alasan nilainya, supaya penilaian ini masih berguna saat dibaca berbulan-bulan kemudian.");
+      toast("warn", "Catatan wajib diisi", "");
       $("#eCatatan").focus();
       return;
     }
