@@ -12512,9 +12512,9 @@ function viewEvaluasiDetail(p){
               '<input id="eTanggal" type="date" value="' + tglISO() + '" required></div>' +
             '<div class="field"><label for="eNilai">Nilai (0–100)</label>' +
               '<input id="eNilai" type="number" min="0" max="100" required placeholder="85"></div>' +
-            '<div class="field span"><label for="eProker">Program kerja</label>' +
+            '<div class="field span"><label for="eProker">Program kerja atau hal yang dinilai</label>' +
               '<input id="eProker" list="daftarProker" autocomplete="off" ' +
-              'placeholder="Kegiatan yang dinilai, misalnya Kunjungan Lapangan Dieng"></div>' +
+              'placeholder="Misalnya Kunjungan Lapangan Dieng, Sikap, atau Kedisiplinan"></div>' +
             '<datalist id="daftarProker">' +
               daftarProker().map(function(k){ return '<option value="' + esc(k) + '"></option>'; }).join("") +
             '</datalist>' +

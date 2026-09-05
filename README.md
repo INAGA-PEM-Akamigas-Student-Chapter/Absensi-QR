@@ -228,10 +228,12 @@ langsung terbaca tanpa perlu disunting satu per satu.
 Untuk jabatan yang tidak memakai penamaan itu, tersedia centang **Tandai staff** di form
 peserta sebagai penunjukan manual.
 
-Satu penilaian berisi tanggal, nilai 0–100, **program kerja**, dan catatan. Kolom program
-kerja menyimpan kegiatan yang dinilai, misalnya `Kunjungan Lapangan Dieng`; nama yang
-pernah dipakai muncul sebagai saran saat mengetik, sehingga penulisannya konsisten dan
-penilaian dari kegiatan yang sama mudah dibandingkan. Kolom ini boleh dikosongkan.
+Satu penilaian berisi tanggal, nilai 0–100, **program kerja atau hal yang dinilai**, dan
+catatan. Kolom itu bebas diisi kegiatan (`Kunjungan Lapangan Dieng`) maupun aspek
+(`Sikap`, `Kedisiplinan`, `Kerja sama`), sehingga satu orang bisa dinilai dari beberapa
+sudut sekaligus. Isian yang pernah dipakai muncul sebagai saran saat mengetik, sehingga
+penulisannya konsisten dan penilaian dengan sudut yang sama mudah dibandingkan. Kolom
+ini boleh dikosongkan.
 
 Penilaian boleh dibuat kapan
 saja dan sebanyak yang diperlukan — **penilaian lama tidak pernah tertimpa**, sehingga
