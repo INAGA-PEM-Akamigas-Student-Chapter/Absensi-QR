@@ -10345,6 +10345,7 @@ main{padding:22px 0 60px}
 .stat .k{font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); font-weight:600}
 .stat .v{font-family:"IBM Plex Mono",monospace; font-size:27px; font-weight:500; line-height:1.25; font-variant-numeric:tabular-nums}
 .stat.s-hadir .v{color:var(--ok)} .stat.s-telat .v{color:var(--warn)} .stat.s-belum .v{color:var(--muted)}
+.stat.s-izin .v{color:var(--accent)}
 
 .log{list-style:none; margin:0; padding:0; max-height:360px; overflow-y:auto}
 .log li{display:flex; align-items:center; gap:11px; padding:10px 16px; border-bottom:1px solid var(--line)}
@@ -10360,6 +10361,7 @@ main{padding:22px 0 60px}
 .pill.hadir{background:var(--ok-soft); color:var(--ok)}
 .pill.terlambat{background:var(--warn-soft); color:var(--warn)}
 .pill.belum{background:var(--sunk); color:var(--muted)}
+.pill.izin{background:var(--accent-soft); color:var(--accent)}
 .pill.pulang{background:var(--accent-soft); color:var(--accent)}
 
 .rows{display:flex; flex-direction:column; gap:11px}
@@ -10467,6 +10469,8 @@ td.persen .bar .bad{background:var(--bad)}
 .stat.s-hadir .k::before{background:var(--ok)}
 .stat.s-telat .k::before{background:var(--warn)}
 .stat.s-belum .k::before{background:var(--line-strong)}
+.stat.s-izin .k::before{background:var(--accent)}
+th.kol-aksi, td.kol-aksi{width:1%; white-space:nowrap; text-align:right}
 .stat .v{display:flex; align-items:baseline; gap:7px}
 .stat .v small{font-family:"Source Sans 3",sans-serif; font-size:12.5px; font-weight:600; color:var(--muted)}
 
@@ -11076,18 +11080,21 @@ function hariTercatat(){
 function statistikPeserta(){
   var hari = hariTercatat(), src = state.demo ? state.contohHari : state.hari;
   return daftarPeserta().map(function(p){
-    var hadir = 0, telat = 0;
+    var hadir = 0, telat = 0, izin = 0;
     hari.forEach(function(iso){
       var r = (src[iso].catatan || {})[p.kode];
-      if(r && r.masuk){ if(r.status === "terlambat") telat++; else hadir++; }
+      if(!r) return;
+      if(r.status === "izin"){ izin++; return; }
+      if(r.masuk){ if(r.status === "terlambat") telat++; else hadir++; }
     });
     var ikut = hadir + telat;
     return {kode:p.kode, nama:p.nama, grup:p.grup || "",
-            hadir:hadir, telat:telat, absen: hari.length - ikut,
+            hadir:hadir, telat:telat, izin:izin,
+            absen: Math.max(0, hari.length - ikut - izin),
             persen: hari.length ? Math.round(ikut / hari.length * 100) : 0};
   });
 }
-var ANGKA_DASBOR = {hadir:1, telat:1, absen:1, persen:1};
+var ANGKA_DASBOR = {hadir:1, telat:1, izin:1, absen:1, persen:1};
 function urutkanDasbor(arr){
   var u = state.urutDasbor, k = u.kolom, arah = (u.arah === "desc") ? -1 : 1;
   return arr.slice().sort(function(a, b){
@@ -11101,7 +11108,7 @@ function ringkasDasbor(){
   var jumlahHadir = 0, jumlahTelat = 0, penuh = 0;
   st.forEach(function(s){
     jumlahHadir += s.hadir; jumlahTelat += s.telat;
-    if(hari.length && s.absen === 0) penuh++;
+    if(hari.length && s.absen === 0 && s.izin === 0) penuh++;
   });
   var slot = hari.length * st.length;
   return {
@@ -11121,14 +11128,41 @@ function bilahRingkas(r){
          '<i class="b-telat" style="width:' + (r.telat / total * 100) + '%"></i>' +
          '</div>';
 }
+/* Izin adalah status tersendiri, bukan kehadiran: tidak ada jam masuk, tetapi
+   ketidakhadirannya diketahui. Karena itu ia tidak dihitung sebagai hadir, dan
+   juga tidak ikut ke dalam angka "belum hadir". */
+async function tandaiIzin(iso, kode){
+  var p = daftarPeserta().filter(function(x){ return x.kode === kode; })[0];
+  if(!p) return;
+  keluarDemo();
+  var c = hariRec(iso)[kode] || {};
+  var dasar = {kode: p.kode, nama: p.nama, grup: p.grup || "", masuk: "", pulang: ""};
+  if(c.status === "izin"){
+    dasar.status = "";
+    await tulisEntri(iso, kode, dasar);
+    toast("ok", "Izin dibatalkan", p.nama);
+  }else{
+    if(c.masuk && !confirm("Ubah catatan " + p.nama + " menjadi Izin?" +
+        String.fromCharCode(10,10) + "Jam masuk yang sudah tercatat akan dihapus."))
+      return;
+    dasar.status = "izin";
+    await tulisEntri(iso, kode, dasar);
+    toast("ok", "Izin dicatat", p.nama + " · " + tglPanjang(iso));
+  }
+  gambarUlang();
+}
 function ringkas(iso){
-  var cat = hariRec(iso), total = daftarPeserta().length, hadir = 0, telat = 0;
+  var cat = hariRec(iso), total = daftarPeserta().length, hadir = 0, telat = 0, izin = 0;
   daftarPeserta().forEach(function(p){
     var r = cat[p.kode];
-    if(!r || !r.masuk) return;
+    if(!r) return;
+    // Izin dicatat tanpa jam masuk, jadi harus diperiksa lebih dulu.
+    if(r.status === "izin"){ izin++; return; }
+    if(!r.masuk) return;
     if(r.status === "terlambat") telat++; else hadir++;
   });
-  return {total:total, hadir:hadir, telat:telat, belum: Math.max(0, total - hadir - telat)};
+  return {total:total, hadir:hadir, telat:telat, izin:izin,
+          belum: Math.max(0, total - hadir - telat - izin)};
 }
 
 /* ---------- penyimpanan ---------- */
@@ -12152,7 +12186,7 @@ function pesertaExcel(){
   ]));
 }
 /* Urutan status yang bermakna, bukan alfabet: hadir, terlambat, lalu belum. */
-var PERINGKAT_STATUS = {"Hadir":0, "Terlambat":1, "Belum hadir":2};
+var PERINGKAT_STATUS = {"Hadir":0, "Terlambat":1, "Izin":2, "Belum hadir":3};
 var KOLOM_REKAP = {kode:1, nama:2, grup:3, masuk:4, pulang:5, status:6};
 
 function urutkanRekap(baris){
@@ -12193,7 +12227,9 @@ function barisRekap(iso){
   var cat = hariRec(iso);
   return urutkanRekap(daftarPeserta().map(function(p){
     var c = cat[p.kode] || {};
-    var st = c.masuk ? (c.status === "terlambat" ? "Terlambat" : "Hadir") : "Belum hadir";
+    var st = c.status === "izin" ? "Izin"
+           : c.masuk ? (c.status === "terlambat" ? "Terlambat" : "Hadir")
+           : "Belum hadir";
     return [iso, p.kode, p.nama, p.grup || "", c.masuk || "", c.pulang || "", st];
   }));
 }
@@ -12213,10 +12249,10 @@ function dasborExcel(){
   unduh("kehadiran-" + tglISO() + ".xlsx", bukuXLSX([
     {
       nama: "Kehadiran",
-      lebar: [12, 26, 22, 10, 10, 10, 14],
-      baris: [["Kode","Nama","Kelas / Divisi","Hadir","Terlambat","Tidak hadir","Kehadiran (%)"]]
+      lebar: [12, 26, 22, 10, 10, 10, 12, 14],
+      baris: [["Kode","Nama","Kelas / Divisi","Hadir","Terlambat","Izin","Tidak hadir","Kehadiran (%)"]]
         .concat(st.map(function(s){
-          return [s.kode, s.nama, s.grup, s.hadir, s.telat, s.absen, s.persen];
+          return [s.kode, s.nama, s.grup, s.hadir, s.telat, s.izin, s.absen, s.persen];
         }))
     },
     {
@@ -12878,7 +12914,7 @@ function viewDasbor(){
       '<td class="mini kol-grup">' + esc(s.grup || "—") + '</td>' +
       '<td class="num">' + s.hadir + '</td>' +
       '<td class="num">' + s.telat + '</td>' +
-      '<td class="num">' + s.absen + '</td>' +
+      '<td class="num">' + s.izin + '</td>' +
       '<td class="persen"><span class="angka">' + s.persen + '%</span>' +
         '<span class="bar"><i class="' + warna + '" style="width:' + s.persen + '%"></i></span></td></tr>';
   }).join("");
@@ -12907,7 +12943,7 @@ function viewDasbor(){
       (r.pertemuan
         ? '<div class="tablewrap"><table><thead><tr>' +
             th("Kode","kode") + th("Nama","nama") + th("Kelas / divisi","grup","kol-grup") +
-            th("Hadir","hadir") + th("Telat","telat") + th("Absen","absen") + th("Kehadiran","persen") +
+            th("Hadir","hadir") + th("Telat","telat") + th("Izin","izin") + th("Kehadiran","persen") +
           '</tr></thead><tbody>' + rows + '</tbody></table></div>'
         : '<div class="empty">' + IKON.kosong + '<b>Belum ada pertemuan tercatat</b>' +
           '<span>Persentase muncul setelah ada pemindaian. Hari tanpa pemindaian tidak dihitung sebagai pertemuan.</span></div>') +
@@ -12917,7 +12953,7 @@ function viewDasbor(){
 
 function viewRekap(){
   var iso = state.tglRekap, ps = daftarPeserta(), r = ringkas(iso);
-  var KELAS = {"Hadir":"hadir", "Terlambat":"terlambat", "Belum hadir":"belum"};
+  var KELAS = {"Hadir":"hadir", "Terlambat":"terlambat", "Izin":"izin", "Belum hadir":"belum"};
   var rows = barisRekap(iso).map(function(b){
     return '<tr><td class="num">' + esc(b[1]) + '</td>' +
       '<td class="nm">' + esc(b[2]) +
@@ -12925,7 +12961,9 @@ function viewRekap(){
       '<td class="mini kol-grup">' + esc(b[3] || "—") + '</td>' +
       '<td class="num">' + esc(b[4] || "—") + '</td>' +
       '<td class="num">' + esc(b[5] || "—") + '</td>' +
-      '<td><span class="pill ' + KELAS[b[6]] + '">' + esc(b[6]) + '</span></td></tr>';
+      '<td><span class="pill ' + KELAS[b[6]] + '">' + esc(b[6]) + '</span></td>' +
+      '<td class="kol-aksi"><button class="btn small" data-act="izin" data-kode="' + esc(b[1]) + '">' +
+        (b[6] === "Izin" ? "Batalkan" : "Izin") + '</button></td></tr>';
   }).join("");
 
   return '' +
@@ -12940,10 +12978,11 @@ function viewRekap(){
       '</div>' +
       '<div class="trend">' + trendSVG() + '</div>' +
     '</div>' +
-    '<div class="stats">' +
+    '<div class="stats empat">' +
       '<div class="stat s-hadir"><div class="k">Hadir</div><div class="v">' + r.hadir +
         '<small>dari ' + r.total + '</small></div></div>' +
       '<div class="stat s-telat"><div class="k">Terlambat</div><div class="v">' + r.telat + '</div></div>' +
+      '<div class="stat s-izin"><div class="k">Izin</div><div class="v">' + r.izin + '</div></div>' +
       '<div class="stat s-belum"><div class="k">Belum hadir</div><div class="v">' + r.belum + '</div></div>' +
       bilahRingkas(r) +
     '</div>' +
@@ -12953,6 +12992,7 @@ function viewRekap(){
         ? '<div class="tablewrap"><table><thead><tr>' +
             th("Kode","kode") + th("Nama","nama") + th("Kelas / divisi","grup","kol-grup") +
             th("Masuk","masuk") + th("Pulang","pulang") + th("Status","status") +
+            '<th class="kol-aksi">Aksi</th>' +
             '</tr></thead><tbody>' + rows + '</tbody></table></div>'
         : '<div class="empty">' + IKON.kosong + '<b>Belum ada peserta terdaftar</b>' +
           '<span>Buka tab Peserta untuk menambahkannya.</span></div>') +
@@ -13274,6 +13314,9 @@ document.addEventListener("click", function(ev){
     unduh("peserta-" + tglISO() + ".csv", "﻿" + baris);
   }
   else if(act === "xlsxPeserta") pesertaExcel();
+  else if(act === "izin"){
+    tandaiIzin(state.tglRekap, t.dataset.kode);
+  }
   else if(act === "xlsxDasbor") dasborExcel();
   else if(act === "xlsxRekap") rekapExcel();
   else if(act === "csvRekap"){
