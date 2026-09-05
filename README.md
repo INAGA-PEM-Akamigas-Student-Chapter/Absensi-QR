@@ -153,7 +153,8 @@ bahkan bila penyerang memegang kunci API Anda.
 
 1. **App Check → Apps** → pilih aplikasi web → provider **reCAPTCHA v3**.
 2. Buat kunci reCAPTCHA v3 di <https://www.google.com/recaptcha/admin> dengan domain
-   `radja4100.github.io`. Tempel **secret key**-nya ke Firebase Console — secret key
+   `inaga-pem-akamigas-student-chapter.github.io`. Tempel **secret key**-nya ke
+   Firebase Console — secret key
    tidak pernah masuk ke repositori ini.
 3. Salin **site key**-nya ke `APPCHECK_SITE_KEY` di `firebase-config.js`, lalu push.
 4. Buka halaman, masuk, pastikan semuanya masih normal. Di **App Check → APIs**,
