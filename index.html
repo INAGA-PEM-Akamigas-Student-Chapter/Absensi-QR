@@ -241,7 +241,7 @@ main{padding:22px 0 60px}
 @keyframes hit{from{opacity:.5} to{opacity:0}}
 
 .scanbar{display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:14px 18px; border-bottom:1px solid var(--line)}
-.scanbar .push{margin-left:auto}
+.scanbar .btn.lebar{flex:1; justify-content:center}
 .manual{display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding:13px 18px}
 .manual input{flex:1; min-width:170px; padding:8px 11px; border:1px solid var(--line-strong); border-radius:8px; background:var(--surface-2)}
 
@@ -264,7 +264,6 @@ main{padding:22px 0 60px}
 .pill.terlambat{background:var(--warn-soft); color:var(--warn)}
 .pill.belum{background:var(--sunk); color:var(--muted)}
 .pill.izin{background:var(--accent-soft); color:var(--accent)}
-.pill.pulang{background:var(--accent-soft); color:var(--accent)}
 
 .rows{display:flex; flex-direction:column; gap:11px}
 .row-f{display:flex; align-items:center; gap:10px; justify-content:space-between}
@@ -562,7 +561,7 @@ textarea{width:100%; padding:8px 11px; border:1px solid var(--line-strong); bord
   .scanbar{gap:9px}
   .seg{width:100%}
   .seg button{flex:1; padding:7px 10px}
-  .scanbar .btn.primary.push{margin-left:0; width:100%; justify-content:center}
+  .scanbar .btn.primary.lebar{width:100%}
   .manual .sep{display:none}
   .manual input{flex:1 1 100%}
   .manual .btn, .manual label.btn{flex:1; justify-content:center}
@@ -685,7 +684,7 @@ function contohHari(){
 }
 
 var state = {
-  tab:"scan", mode:"masuk", demo:true, storage:"lokal",
+  tab:"scan", demo:true, storage:"lokal",
   peserta:[], hari:{}, log:[],
   pengaturan:{jamMasuk:"07:30", toleransi:10},
   tglRekap: tglISO(),
@@ -1115,7 +1114,7 @@ async function tandaiIzin(iso, kode){
   if(!p) return;
   keluarDemo();
   var c = hariRec(iso)[kode] || {};
-  var dasar = {kode: p.kode, nama: p.nama, grup: p.grup || "", masuk: "", pulang: ""};
+  var dasar = {kode: p.kode, nama: p.nama, grup: p.grup || "", masuk: ""};
   if(statusHari(c) === "izin"){
     dasar.status = "";
     await tulisEntri(iso, kode, dasar);
@@ -1839,34 +1838,17 @@ function proses(teks){
 
   var iso = tglISO(), jam = jamHM(), rec = hariRec(iso)[p.kode];
 
-  if(state.mode === "masuk"){
-    if(rec && rec.masuk){
-      bunyi(false); kedip(false);
-      toast("warn", p.nama, "Sudah tercatat masuk pukul " + rec.masuk);
-      return;
-    }
-    var st = statusMasuk(jam);
-    tulisEntri(iso, p.kode, {kode:p.kode, nama:p.nama, grup:p.grup, masuk:jam, status:st});
-    state.log.unshift({nama:p.nama, grup:p.grup, jam:jam, jenis:st});
-    bunyi(true); kedip(true);
-    toast(st === "hadir" ? "ok" : "warn", p.nama,
-      (st === "hadir" ? "Hadir" : "Terlambat") + " · masuk " + jam);
-  }else{
-    if(!rec || !rec.masuk){
-      bunyi(false); kedip(false);
-      toast("bad", p.nama, "Belum ada catatan masuk hari ini");
-      return;
-    }
-    if(rec.pulang){
-      bunyi(false); kedip(false);
-      toast("warn", p.nama, "Sudah tercatat pulang pukul " + rec.pulang);
-      return;
-    }
-    tulisEntri(iso, p.kode, {pulang:jam});
-    state.log.unshift({nama:p.nama, grup:p.grup, jam:jam, jenis:"pulang"});
-    bunyi(true); kedip(true);
-    toast("ok", p.nama, "Pulang · " + jam);
+  if(rec && rec.masuk){
+    bunyi(false); kedip(false);
+    toast("warn", p.nama, "Sudah tercatat masuk pukul " + rec.masuk);
+    return;
   }
+  var st = statusMasuk(jam);
+  tulisEntri(iso, p.kode, {kode:p.kode, nama:p.nama, grup:p.grup, masuk:jam, status:st});
+  state.log.unshift({nama:p.nama, grup:p.grup, jam:jam, jenis:st});
+  bunyi(true); kedip(true);
+  toast(st === "hadir" ? "ok" : "warn", p.nama,
+    (st === "hadir" ? "Hadir" : "Terlambat") + " · masuk " + jam);
   state.log = state.log.slice(0, 40);
   gambarUlang();
 }
@@ -2154,7 +2136,7 @@ function bukuXLSX(lembar){
 }
 
 /* Satu sumber baris untuk CSV maupun Excel, supaya isinya tidak pernah berbeda. */
-var KEPALA_REKAP = ["Tanggal","Kode","Nama","Divisi / Jabatan","Jam Masuk","Jam Pulang","Status"];
+var KEPALA_REKAP = ["Tanggal","Kode","Nama","Divisi / Jabatan","Jam Masuk","Status"];
 var KEPALA_PESERTA = ["Kode","Nama","Divisi / Jabatan","Status","Isi QR"];
 function barisPeserta(){
   return daftarPeserta().map(function(p){
@@ -2199,7 +2181,7 @@ function pesertaExcel(){
 /* Urutan status yang bermakna, bukan alfabet: hadir, terlambat, lalu belum. */
 var LABEL_STATUS = {hadir:"Hadir", terlambat:"Terlambat", izin:"Izin", belum:"Belum hadir"};
 var PERINGKAT_STATUS = {"Hadir":0, "Terlambat":1, "Izin":2, "Belum hadir":3};
-var KOLOM_REKAP = {kode:1, nama:2, grup:3, masuk:4, pulang:5, status:6};
+var KOLOM_REKAP = {kode:1, nama:2, grup:3, masuk:4, status:5};
 
 function urutkanRekap(baris){
   var u = state.urutRekap, i = KOLOM_REKAP[u.kolom], arah = (u.arah === "desc") ? -1 : 1;
@@ -2209,7 +2191,7 @@ function urutkanRekap(baris){
     if(u.kolom === "status"){
       c = (PERINGKAT_STATUS[x] == null ? 9 : PERINGKAT_STATUS[x]) -
           (PERINGKAT_STATUS[y] == null ? 9 : PERINGKAT_STATUS[y]);
-    }else if(u.kolom === "masuk" || u.kolom === "pulang"){
+    }else if(u.kolom === "masuk"){
       // yang belum terisi selalu di bawah, ke arah mana pun diurutkan
       if(!x && !y) c = 0;
       else if(!x) return 1;
@@ -2240,7 +2222,7 @@ function barisRekap(iso){
   return urutkanRekap(daftarPeserta().map(function(p){
     var c = cat[p.kode] || {};
     var st = LABEL_STATUS[statusHari(c)];
-    return [iso, p.kode, p.nama, p.grup || "", c.masuk || "", c.pulang || "", st];
+    return [iso, p.kode, p.nama, p.grup || "", c.masuk || "", st];
   }));
 }
 function dasborExcel(){
@@ -2457,10 +2439,13 @@ function viewScan(){
 
   return '' +
   '<div class="col">' +
-  '<div class="stats">' +
+  /* Empat kartu, bukan tiga: sejak izin punya statusnya sendiri, tiga kartu
+     tidak lagi menjumlahkan seluruh peserta dan yang izin lenyap dari layar. */
+  '<div class="stats empat">' +
     '<div class="stat s-hadir"><div class="k">Hadir</div><div class="v">' + r.hadir +
       '<small>dari ' + r.total + '</small></div></div>' +
     '<div class="stat s-telat"><div class="k">Terlambat</div><div class="v">' + r.telat + '</div></div>' +
+    '<div class="stat s-izin"><div class="k">Izin</div><div class="v">' + r.izin + '</div></div>' +
     '<div class="stat s-belum"><div class="k">Belum hadir</div><div class="v">' + r.belum + '</div></div>' +
     bilahRingkas(r) +
   '</div>' +
@@ -2468,11 +2453,7 @@ function viewScan(){
     '<div class="col">' +
       '<div class="card">' +
         '<div class="scanbar">' +
-          '<div class="seg" id="modeSeg">' +
-            '<button data-mode="masuk" aria-pressed="' + (state.mode==="masuk") + '">Jam masuk</button>' +
-            '<button data-mode="pulang" aria-pressed="' + (state.mode==="pulang") + '">Jam pulang</button>' +
-          '</div>' +
-          '<button class="btn primary push" data-act="' + (jalan ? "stop" : "start") + '">' +
+          '<button class="btn primary lebar" data-act="' + (jalan ? "stop" : "start") + '">' +
             (jalan ? IKON.henti + "Hentikan kamera" : IKON.kamera + "Nyalakan kamera") + '</button>' +
         '</div>' +
         '<div class="viewport idle" id="viewport">' + ph + reticle + '<div class="flash" id="flash"></div></div>' +
@@ -2515,10 +2496,9 @@ function logHTML(){
            '<span>Setiap kartu yang terbaca akan muncul di sini, lengkap dengan jam dan statusnya.</span></div>';
   }
   var li = state.log.slice(0, 12).map(function(x){
-    var label = x.jenis === "pulang" ? "pulang" : x.jenis;
     return '<li><span class="who"><span class="n">' + esc(x.nama) + '</span>' +
            '<span class="m">' + esc(x.grup || "—") + '</span></span>' +
-           '<span class="pill ' + label + '">' + (label === "pulang" ? "Pulang" : label === "hadir" ? "Hadir" : "Terlambat") + '</span>' +
+           '<span class="pill ' + x.jenis + '">' + (x.jenis === "hadir" ? "Hadir" : "Terlambat") + '</span>' +
            '<span class="t">' + esc(x.jam) + '</span></li>';
   }).join("");
   return '<ul class="log">' + li + '</ul>';
@@ -3013,10 +2993,9 @@ function viewRekap(){
         '<span class="sub-grup">' + esc(b[3] || "—") + '</span></td>' +
       '<td class="mini kol-grup">' + esc(b[3] || "—") + '</td>' +
       '<td class="num">' + esc(b[4] || "—") + '</td>' +
-      '<td class="num">' + esc(b[5] || "—") + '</td>' +
-      '<td><span class="pill ' + KELAS[b[6]] + '">' + esc(b[6]) + '</span></td>' +
+      '<td><span class="pill ' + KELAS[b[5]] + '">' + esc(b[5]) + '</span></td>' +
       '<td class="kol-aksi"><button class="btn small" data-act="izin" data-kode="' + esc(b[1]) + '">' +
-        (b[6] === "Izin" ? "Batalkan" : "Izin") + '</button></td></tr>';
+        (b[5] === "Izin" ? "Batalkan" : "Izin") + '</button></td></tr>';
   }).join("");
 
   return '' +
@@ -3044,7 +3023,7 @@ function viewRekap(){
       (ps.length
         ? '<div class="tablewrap"><table><thead><tr>' +
             th("Kode","kode") + th("Nama","nama") + th("Divisi / jabatan","grup","kol-grup") +
-            th("Masuk","masuk") + th("Pulang","pulang") + th("Status","status") +
+            th("Masuk","masuk") + th("Status","status") +
             '<th class="kol-aksi">Aksi</th>' +
             '</tr></thead><tbody>' + rows + '</tbody></table></div>'
         : '<div class="empty">' + IKON.kosong + '<b>Belum ada peserta terdaftar</b>' +
@@ -3336,7 +3315,6 @@ document.addEventListener("click", function(ev){
     var tb = $("#tombolMenu"); if(tb) tb.focus();
     return;
   }
-  if(t.dataset.mode){ state.mode = t.dataset.mode; gambarUlang(); return; }
   if(t.dataset.periode !== undefined){ state.periode = +t.dataset.periode; gambarUlang(); return; }
   if(t.dataset.tema){
     state.tampilan.tema = t.dataset.tema; tulisTampilan(); terapkanTema(); gambarUlang(); return;
