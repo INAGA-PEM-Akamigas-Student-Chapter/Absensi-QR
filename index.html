@@ -10533,6 +10533,31 @@ td.nm{white-space:nowrap}
 textarea{width:100%; padding:8px 11px; border:1px solid var(--line-strong); border-radius:8px;
   background:var(--surface-2); color:inherit; font:inherit; resize:vertical}
 .formgrid .span{grid-column:1 / -1}
+.baris-orang{display:flex; align-items:center; gap:10px; min-width:0}
+.nama-teks{min-width:0}
+.avatar-orang{
+  width:34px; height:34px; flex:none; border-radius:50%; display:block;
+  background-color:var(--sunk); background-size:cover; background-position:center;
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.12);
+}
+.avatar-orang.inisial{
+  display:grid; place-items:center; color:#fff;
+  font-family:Archivo,sans-serif; font-weight:700; font-size:12.5px; letter-spacing:.02em;
+}
+.avatar-orang.besar{width:46px; height:46px; font-size:16px}
+.tombol-avatar{
+  position:relative; border:0; padding:0; background:none; cursor:pointer;
+  border-radius:50%; flex:none; line-height:0;
+}
+.tombol-avatar .tanda-kamera{
+  position:absolute; right:-3px; bottom:-3px; width:17px; height:17px; border-radius:50%;
+  background:var(--surface); color:var(--ink-2); display:grid; place-items:center;
+  box-shadow:0 0 0 1px var(--line-strong); opacity:0; transition:opacity .12s;
+}
+.tombol-avatar .tanda-kamera svg{width:10px; height:10px}
+.tombol-avatar:hover .tanda-kamera, .tombol-avatar:focus-visible .tanda-kamera{opacity:1}
+@media (hover:none){ .tombol-avatar .tanda-kamera{opacity:1} }
+
 .tanda-staff{display:inline-block; padding:1px 7px; border-radius:999px; font-size:10.5px;
   font-weight:600; letter-spacing:.04em; text-transform:uppercase;
   background:var(--accent-soft); color:var(--accent); vertical-align:1px}
@@ -10643,6 +10668,7 @@ textarea{width:100%; padding:8px 11px; border:1px solid var(--line-strong); bord
 <div class="toasts" id="toasts" aria-live="polite"></div>
 <canvas id="grab" class="sr"></canvas>
 <video id="cam" playsinline muted class="sr"></video>
+<input id="fileFoto" class="sr" type="file" accept="image/*">
 
 <script>
 "use strict";
@@ -10697,6 +10723,7 @@ var state = {
   kelola: false,                     // boleh mengubah peserta dan aturan jam
   ditolak: null,                     // keterangan bila Firestore menolak membaca
   bukaEval: null,                    // kode peserta yang sedang dilihat riwayatnya
+  fotoUntuk: null,                   // kode peserta yang fotonya sedang diganti
   bagian: "absensi",                 // "absensi" atau "evaluasi"
   kameraPesan: "",
   contohHari: contohHari()
@@ -10761,6 +10788,69 @@ async function hapusEvaluasi(id){
 /* Divisi seperti "Staff of Professionalism" langsung dikenali sebagai staff.
    Centang manual tetap ada untuk jabatan yang tidak memakai penamaan itu. */
 function bolehKelola(){ return state.kelola; }
+
+/* ---------- avatar peserta ----------
+   Tanpa foto, dipakai inisial dengan warna yang diturunkan dari namanya, jadi
+   satu orang selalu mendapat warna yang sama di perangkat mana pun. */
+function inisial(nama){
+  var kata = String(nama || "").trim().split(/\s+/).filter(Boolean);
+  if(!kata.length) return "?";
+  var a = kata[0][0] || "";
+  var b = kata.length > 1 ? (kata[1][0] || "") : "";
+  return (a + b).toUpperCase();
+}
+function ronaNama(nama){
+  var s = String(nama || ""), h = 0;
+  for(var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360;
+  return h;
+}
+function avatarPeserta(p, kelas){
+  var k = "avatar-orang" + (kelas ? " " + kelas : "");
+  if(p.foto){
+    return '<span class="' + k + '" style="background-image:url(' + esc(p.foto) + ')"' +
+           ' role="img" aria-label="Foto ' + esc(p.nama) + '"></span>';
+  }
+  return '<span class="' + k + ' inisial" style="background:hsl(' + ronaNama(p.nama) + ' 34% 34%)"' +
+         ' role="img" aria-label="' + esc(p.nama) + '">' + esc(inisial(p.nama)) + '</span>';
+}
+
+/* Foto dipotong bujur sangkar dan dikecilkan sebelum disimpan, supaya dokumen
+   peserta tetap ringan dan tidak memberatkan pemuatan daftar. */
+function kecilkanFoto(file, sisi){
+  return new Promise(function(res, rej){
+    var url = URL.createObjectURL(file);
+    var img = new Image();
+    img.onload = function(){
+      URL.revokeObjectURL(url);
+      var cv = document.createElement("canvas");
+      cv.width = sisi; cv.height = sisi;
+      var cx = cv.getContext("2d");
+      var s = Math.min(img.naturalWidth, img.naturalHeight);
+      cx.drawImage(img, (img.naturalWidth - s) / 2, (img.naturalHeight - s) / 2, s, s, 0, 0, sisi, sisi);
+      res(cv.toDataURL("image/jpeg", 0.82));
+    };
+    img.onerror = function(){ URL.revokeObjectURL(url); rej(new Error("gagal")); };
+    img.src = url;
+  });
+}
+async function simpanFoto(kode, dataURI){
+  var p = daftarPeserta().filter(function(x){ return x.kode === kode; })[0];
+  if(!p) return;
+  var baru = Object.assign({}, p);
+  if(dataURI) baru.foto = dataURI; else delete baru.foto;
+  if(db){
+    try{ await db.collection("peserta").doc(slug(kode)).set(baru); }
+    catch(e){ toast("bad", "Gagal menyimpan foto", (e && e.code) || ""); return; }
+  }else if(fb){
+    try{ await fb.collection("peserta").doc(slug(kode)).set(baru); }
+    catch(e){ toast("bad", "Gagal menyimpan foto", pesanFirestore(e && e.code)); return; }
+  }else{
+    state.peserta = state.peserta.map(function(x){ return x.kode === kode ? baru : x; });
+    tulisLokal();
+  }
+  toast("ok", dataURI ? "Foto disimpan" : "Foto dihapus", p.nama);
+  gambarUlang();
+}
 
 function apakahStaff(p){
   return !!p.staff || /^\s*staff\b/i.test(String(p.grup || ""));
@@ -12128,9 +12218,17 @@ function viewPeserta(){
   var ps = daftarPeserta();
   var rows = ps.map(function(p){
     return '<tr><td class="num">' + esc(p.kode) + '</td>' +
-      '<td class="nm">' + esc(p.nama) +
-        (apakahStaff(p) ? ' <span class="tanda-staff">Staff</span>' : '') +
-        '<span class="sub-grup">' + esc(p.grup || "—") + '</span></td>' +
+      '<td class="nm"><span class="baris-orang">' +
+        (bolehKelola()
+          ? '<button class="tombol-avatar" data-act="foto" data-kode="' + esc(p.kode) + '" ' +
+            'title="' + (p.foto ? "Ganti foto" : "Unggah foto") + '" ' +
+            'aria-label="Ubah foto ' + esc(p.nama) + '">' + avatarPeserta(p) +
+            '<span class="tanda-kamera" aria-hidden="true">' + IKON.kamera + '</span></button>'
+          : avatarPeserta(p)) +
+        '<span class="nama-teks">' + esc(p.nama) +
+          (apakahStaff(p) ? ' <span class="tanda-staff">Staff</span>' : '') +
+          '<span class="sub-grup">' + esc(p.grup || "—") + '</span></span>' +
+      '</span></td>' +
       '<td class="mini kol-grup">' + esc(p.grup || "—") + '</td>' +
       '<td class="act">' +
         '<button class="btn small" data-act="qr" data-kode="' + esc(p.kode) +
@@ -12322,8 +12420,9 @@ function viewEvaluasi(){
     var d = evaluasiPeserta(p.kode), rata = rataEvaluasi(p.kode);
     var akhir = d[0];
     return '<tr><td class="num">' + esc(p.kode) + '</td>' +
-      '<td class="nm">' + esc(p.nama) +
-        '<span class="sub-grup">' + esc(p.grup || "—") + '</span></td>' +
+      '<td class="nm"><span class="baris-orang">' + avatarPeserta(p) +
+        '<span class="nama-teks">' + esc(p.nama) +
+          '<span class="sub-grup">' + esc(p.grup || "—") + '</span></span></span></td>' +
       '<td class="mini kol-grup">' + esc(p.grup || "—") + '</td>' +
       '<td class="num">' + d.length + '</td>' +
       '<td class="num">' + (akhir ? esc(akhir.tanggal) : "—") + '</td>' +
@@ -12379,6 +12478,7 @@ function viewEvaluasiDetail(p){
     '<div class="card">' +
       '<div class="card-head">' +
         '<button class="btn small" data-act="tutupEval">← Kembali</button>' +
+        avatarPeserta(p, "besar") +
         '<h2 class="judul-orang">' + esc(p.nama) + '</h2>' +
         '<span class="note">' + esc(p.grup || "—") + ' · kode ' + esc(p.kode) + '</span></div>' +
       '<div class="stats">' +
@@ -12786,6 +12886,16 @@ document.addEventListener("click", function(ev){
     if(inp && inp.value.trim()){ proses(inp.value); inp.value = ""; inp.focus(); }
   }
   else if(act === "kosongkan"){ keluarDemo(); gambarUlang(); }
+  else if(act === "foto"){
+    state.fotoUntuk = t.dataset.kode;
+    var pf = daftarPeserta().filter(function(x){ return x.kode === state.fotoUntuk; })[0];
+    if(pf && pf.foto && !confirm("Ganti foto " + pf.nama + "?" + String.fromCharCode(10,10) +
+        "Tekan Batal untuk menghapus fotonya.")){
+      simpanFoto(state.fotoUntuk, null);
+      return;
+    }
+    $("#fileFoto").click();
+  }
   else if(act === "bukaEval"){ state.bukaEval = t.dataset.kode; gambarUlang(); window.scrollTo(0,0); }
   else if(act === "tutupEval"){ state.bukaEval = null; gambarUlang(); window.scrollTo(0,0); }
   else if(act === "hapusEval"){
@@ -12875,6 +12985,16 @@ document.addEventListener("keydown", function(ev){
 
 document.addEventListener("change", function(ev){
   var id = ev.target.id;
+  if(id === "fileFoto"){
+    var berkas = ev.target.files && ev.target.files[0];
+    ev.target.value = "";
+    if(berkas && state.fotoUntuk){
+      kecilkanFoto(berkas, 160)
+        .then(function(uri){ simpanFoto(state.fotoUntuk, uri); })
+        .catch(function(){ toast("bad", "Gambar gagal dibaca", "Coba berkas JPG atau PNG."); });
+    }
+    return;
+  }
   if(id === "fileQR"){
     var f = ev.target.files && ev.target.files[0];
     if(f) pindaiGambar(f);

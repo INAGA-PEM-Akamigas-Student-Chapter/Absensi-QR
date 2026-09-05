@@ -10,6 +10,12 @@ Excel maupun CSV.
 1. **Peserta** — tambah nama, kode/NIS, dan kelas atau divisi. Setiap peserta punya
    tombol **Kartu QR**; unduh PNG-nya lalu cetak sebagai kartu. Isi QR berformat
    `PRESENSI:<kode>` (kartu lama berawalan `PRESENSIA:` tetap terbaca).
+
+   Setiap orang otomatis mendapat **avatar inisial** berwarna yang diturunkan dari
+   namanya, jadi warnanya selalu sama di perangkat mana pun. Klik avatarnya untuk
+   mengunggah foto sungguhan; klik lagi lalu tekan Batal untuk menghapusnya. Foto
+   dipotong bujur sangkar dan dikecilkan ke 160 piksel sebelum disimpan, sekitar
+   10 KB per orang, sehingga tidak memberatkan pemuatan daftar.
 2. **Pindai** — pilih *Jam masuk* atau *Jam pulang*, nyalakan kamera, arahkan kartu.
    Alternatif tanpa kamera: unggah foto kartu QR, tempel tangkapan layar, seret berkas
    gambar, atau ketik kodenya langsung.
@@ -234,7 +240,7 @@ siapa yang memberi nilai tertentu, termasuk oleh pemilik proyek.
 ### Struktur data di Firestore
 
 ```
-peserta/<kode>          { kode, nama, grup, staff }
+peserta/<kode>          { kode, nama, grup, staff, foto }   foto: data URI JPEG 160px, opsional
 evaluasi/<id>           { kode, tanggal, nilai, catatan, dibuat }   tanpa identitas penilai
 pengguna/<email>        { kelola, penilai }                          hanya dari Firebase Console
 absensi/<YYYY-MM-DD>    { tanggal, catatan: { <kode>: { nama, grup, masuk, pulang, status } } }
