@@ -12730,15 +12730,6 @@ function kartuBest(){
         '<span>Podium tersusun sendiri begitu ada staff yang dinilai pada bulan tersebut.</span></div>') +
     (sisa ? '<ul class="daftar-peringkat">' + sisa + '</ul>' : '') +
     (terkunci ? '<ul class="daftar-peringkat">' + terkunci + '</ul>' : '') +
-    '<div class="card-pad"><p class="hint m0">' +
-      'Peringkat dihitung dari rata-rata penilaian pada bulan itu saja, dan juaranya ' +
-      'ditentukan otomatis. Yang pernah menjadi Best Staff tidak ikut podium bulan ' +
-      'berikutnya, dan ditampilkan terpisah di bawah beserta bulan kemenangannya. ' +
-      (beku
-        ? 'Bulan ini sudah diselesaikan, jadi hasilnya tidak berubah lagi meskipun ada penilaian baru.'
-        : 'Selama belum diselesaikan, hasilnya masih dapat berubah bila ada penilaian baru' +
-          (bolehKelola() ? '.' : ' — penyelesaian dilakukan oleh akun pengelola.')) +
-    '</p></div>' +
   '</div>';
 }
 
