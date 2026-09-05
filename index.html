@@ -12989,7 +12989,8 @@ function viewEvaluasiDetail(p){
               daftarProker().map(function(k){ return '<option value="' + esc(k) + '"></option>'; }).join("") +
             '</datalist>' +
             '<div class="field span"><label for="eCatatan">Catatan</label>' +
-              '<textarea id="eCatatan" rows="3" placeholder="Apa yang sudah baik dan apa yang perlu diperbaiki."></textarea></div>' +
+              '<textarea id="eCatatan" rows="3" required ' +
+              'placeholder="Apa yang sudah baik dan apa yang perlu diperbaiki."></textarea></div>' +
             '<button class="btn primary span" type="submit">' + IKON.tambah + 'Simpan penilaian</button>' +
           '</div>' +
         '</form>' +
@@ -13458,8 +13459,15 @@ document.addEventListener("submit", function(ev){
     if(!state.bukaEval) return;
     var nilai = $("#eNilai").value;
     if(nilai === "") return;
+    var catatan = $("#eCatatan").value.trim();
+    if(!catatan){
+      toast("warn", "Catatan wajib diisi",
+            "Tuliskan alasan nilainya, supaya penilaian ini masih berguna saat dibaca berbulan-bulan kemudian.");
+      $("#eCatatan").focus();
+      return;
+    }
     simpanEvaluasi(state.bukaEval, $("#eTanggal").value || tglISO(), nilai,
-                   $("#eCatatan").value, $("#eProker").value);
+                   catatan, $("#eProker").value);
     toast("ok", "Penilaian tersimpan", "Tercatat anonim");
     $("#eNilai").value = ""; $("#eCatatan").value = ""; $("#eProker").value = "";
     return;
