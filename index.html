@@ -10554,6 +10554,11 @@ td.nm{white-space:nowrap}
 .tiang.kosong{opacity:.35}
 .tiang.kosong .alas{height:30px}
 .peringkat.redup{opacity:.62}
+.lencana-selesai{display:inline-flex; align-items:center; gap:6px; padding:4px 11px;
+  border-radius:999px; font-size:12px; font-weight:600;
+  background:var(--ok-soft); color:var(--ok); white-space:nowrap}
+.tiang.beku .alas{background:var(--ok-soft); border-color:var(--ok)}
+.tiang.beku .angka-pos{color:var(--ok)}
 
 .daftar-peringkat{list-style:none; margin:0; padding:0}
 .peringkat{display:flex; align-items:center; gap:11px; padding:11px 18px;
@@ -10784,6 +10789,7 @@ var state = {
   batasHari: 60,                     // berapa hari riwayat yang dimuat dari server
   evaluasi: [],                      // {id, kode, tanggal, nilai, proker, catatan, dibuat}
   bulanBest: null,                   // bulan yang sedang dilihat pada peringkat
+  selesai: {},                       // "YYYY-MM" -> hasil yang sudah dibekukan
   penilai: false,                    // boleh membuka bagian Evaluasi
   kelola: false,                     // boleh mengubah peserta dan aturan jam
   ditolak: null,                     // keterangan bila Firestore menolak membaca
@@ -10930,11 +10936,11 @@ function namaBulan(b){
   if(p.length < 2) return b || "";
   return BULAN[(+p[1]) - 1] + " " + p[0];
 }
-function bacaBestLokal(){
-  try{ return JSON.parse(localStorage.getItem(LS_EVAL + ".best") || "{}") || {}; }catch(e){ return {}; }
+function bacaSelesaiLokal(){
+  try{ return JSON.parse(localStorage.getItem(LS_EVAL + ".selesai") || "{}") || {}; }catch(e){ return {}; }
 }
-function tulisBestLokal(){
-  try{ localStorage.setItem(LS_EVAL + ".best", JSON.stringify(state.best)); }catch(e){}
+function tulisSelesaiLokal(){
+  try{ localStorage.setItem(LS_EVAL + ".selesai", JSON.stringify(state.selesai)); }catch(e){}
 }
 function peringkatBulan(bulan){
   var staff = daftarStaff();
@@ -10968,16 +10974,50 @@ function bulanBerpenilaian(){
   return Object.keys(ada).sort();
 }
 function hitungPemenang(){
-  var ulang = state.pengaturan.ulangBest === true;
   var sudah = {}, perBulan = {};
-  bulanBerpenilaian().forEach(function(b){
-    var calon = peringkatBulan(b).filter(function(x){ return ulang || !sudah[x.kode]; });
+  var semua = {};
+  bulanBerpenilaian().forEach(function(b){ semua[b] = true; });
+  Object.keys(state.selesai).forEach(function(b){ semua[b] = true; });
+
+  Object.keys(semua).sort().forEach(function(b){
+    var beku = state.selesai[b];
+    if(beku && beku.kode){
+      // Bulan yang sudah diselesaikan tidak dihitung ulang, apa pun perubahan nilainya.
+      perBulan[b] = {kode: beku.kode, nama: beku.nama, rata: beku.nilai, beku: true};
+      sudah[beku.kode] = b;
+      return;
+    }
+    var calon = peringkatBulan(b).filter(function(x){ return !sudah[x.kode]; });
     if(calon.length){
       perBulan[b] = calon[0];
-      if(!ulang) sudah[calon[0].kode] = b;
+      sudah[calon[0].kode] = b;
     }
   });
   return {perBulan: perBulan, sudah: sudah};
+}
+async function selesaikanBulan(bulan, juara){
+  var rec = {id: "selesai__" + bulan, jenis: "selesai", bulan: bulan,
+             kode: juara.kode, nama: juara.nama, nilai: juara.rata,
+             dibuat: new Date().toISOString()};
+  var salin = Object.assign({}, state.selesai);
+  salin[bulan] = rec;
+  state.selesai = salin;
+  if(db){ try{ await db.collection("evaluasi").doc(rec.id).set(rec); }
+          catch(e){ toast("bad", "Gagal menyelesaikan", (e && e.code) || ""); } }
+  else if(fb){ try{ await fb.collection("evaluasi").doc(rec.id).set(rec); }
+               catch(e){ toast("bad", "Gagal menyelesaikan", pesanFirestore(e && e.code)); } }
+  else{ tulisSelesaiLokal(); }
+  gambarUlang();
+}
+async function bukaKembaliBulan(bulan){
+  var id = (state.selesai[bulan] && state.selesai[bulan].id) || ("selesai__" + bulan);
+  var salin = Object.assign({}, state.selesai);
+  delete salin[bulan];
+  state.selesai = salin;
+  if(db){ try{ await db.collection("evaluasi").doc(id).delete(); }catch(e){} }
+  else if(fb){ try{ await fb.collection("evaluasi").doc(id).delete(); }catch(e){} }
+  else{ tulisSelesaiLokal(); }
+  gambarUlang();
 }
 
 function daftarStaff(){
@@ -11269,12 +11309,15 @@ function pasangSnapshotFB(){
   }, function(e){ catatPenolakan(e); }));
 
   fbLepas.push(fb.collection("evaluasi").onSnapshot(function(snap){
-    var arr = [], best = {};
+    var arr = [], selesai = {};
     snap.forEach(function(d){
       var v = d.data() || {};
-      if(v.jenis === "best"){
-        best[v.bulan || d.id] = {id: d.id, bulan: v.bulan || "", kode: v.kode || "",
-                                 nama: v.nama || "", nilai: +v.nilai || 0};
+      if(v.jenis === "selesai"){
+        selesai[v.bulan || d.id] = {id: d.id, bulan: v.bulan || "", kode: v.kode || "",
+                                    nama: v.nama || "", nilai: +v.nilai || 0,
+                                    dibuat: v.dibuat || ""};
+      }else if(v.jenis === "best"){
+        // sisa rancangan lama; diabaikan
       }else{
         arr.push({id: d.id, kode: v.kode || "", tanggal: v.tanggal || "",
                   nilai: +v.nilai || 0, proker: v.proker || "",
@@ -11282,6 +11325,7 @@ function pasangSnapshotFB(){
       }
     });
     state.evaluasi = arr;
+    state.selesai = selesai;
     gambarUlang();
   }, function(e){
     state.evaluasi = [];
@@ -11304,7 +11348,6 @@ function pasangSnapshotFB(){
       var v = snap.data() || {};
       if(v.jamMasuk) state.pengaturan.jamMasuk = v.jamMasuk;
       if(v.toleransi != null) state.pengaturan.toleransi = v.toleransi;
-      state.pengaturan.ulangBest = v.ulangBest === true;
       gambarUlang();
     }
   }, function(){}));
@@ -11403,12 +11446,15 @@ function pasangSnapshot(){
   }, function(err){ catatPenolakan(err); });
 
   db.collection("evaluasi").onSnapshot(function(snap){
-    var arr = [], best = {};
+    var arr = [], selesai = {};
     snap.docs.forEach(function(d){
       var v = d.data() || {};
-      if(v.jenis === "best"){
-        best[v.bulan || d.id] = {id: d.id, bulan: v.bulan || "", kode: v.kode || "",
-                                 nama: v.nama || "", nilai: +v.nilai || 0};
+      if(v.jenis === "selesai"){
+        selesai[v.bulan || d.id] = {id: d.id, bulan: v.bulan || "", kode: v.kode || "",
+                                    nama: v.nama || "", nilai: +v.nilai || 0,
+                                    dibuat: v.dibuat || ""};
+      }else if(v.jenis === "best"){
+        // sisa rancangan lama; diabaikan
       }else{
         arr.push({id: d.id, kode: v.kode || "", tanggal: v.tanggal || "",
                   nilai: +v.nilai || 0, proker: v.proker || "",
@@ -11416,15 +11462,15 @@ function pasangSnapshot(){
       }
     });
     state.evaluasi = arr;
+    state.selesai = selesai;
     gambarUlang();
-  }, function(){ state.evaluasi = []; });
+  }, function(){ state.evaluasi = []; state.selesai = {}; });
 
   db.doc("pengaturan/umum").onSnapshot(function(snap){
     if(snap.exists){
       var v = snap.data() || {};
       if(v.jamMasuk) state.pengaturan.jamMasuk = v.jamMasuk;
       if(v.toleransi != null) state.pengaturan.toleransi = v.toleransi;
-      state.pengaturan.ulangBest = v.ulangBest === true;
       gambarUlang();
     }
   }, function(){});
@@ -11451,6 +11497,7 @@ async function siapkanPenyimpanan(){
       state.demo = false;
     }
     state.evaluasi = bacaEvalLokal();
+    state.selesai = bacaSelesaiLokal();
     state.penilai = true; state.kelola = true;   // tanpa akun, tidak ada yang perlu dibatasi
     gambarUlang();
   }
@@ -12608,23 +12655,32 @@ function kartuBest(){
   var bulan = state.bulanBest || bulanIni();
   var hasil = hitungPemenang();
   var sudah = hasil.sudah;
-  var ulang = state.pengaturan.ulangBest === true;
+  var beku = state.selesai[bulan] || null;
 
   // Yang pernah menang di bulan sebelumnya tidak ikut naik podium bulan ini.
   var semua = peringkatBulan(bulan);
-  var layak = semua.filter(function(x){
-    return ulang || !sudah[x.kode] || sudah[x.kode] === bulan;
-  });
-  var pernah = semua.filter(function(x){
-    return !ulang && sudah[x.kode] && sudah[x.kode] !== bulan;
-  });
+  var layak = semua.filter(function(x){ return !sudah[x.kode] || sudah[x.kode] === bulan; });
+  var pernah = semua.filter(function(x){ return sudah[x.kode] && sudah[x.kode] !== bulan; });
+
+  // Bulan yang sudah diselesaikan: juaranya dikunci di puncak podium, bukan diambil
+  // dari peringkat terbaru, supaya podium sejalan dengan hasil yang dibekukan.
+  if(beku && beku.kode){
+    var pos = -1;
+    for(var i = 0; i < layak.length; i++){ if(layak[i].kode === beku.kode){ pos = i; break; } }
+    if(pos > 0) layak.unshift(layak.splice(pos, 1)[0]);
+    else if(pos < 0){
+      var orang = daftarPeserta().filter(function(q){ return q.kode === beku.kode; })[0] || {};
+      layak.unshift({kode: beku.kode, nama: beku.nama, grup: orang.grup || "",
+                     foto: orang.foto, jumlah: 0, rata: beku.nilai});
+    }
+  }
 
   var URUT = [1, 0, 2];                       // dua di kiri, satu di tengah, tiga di kanan
   var podium = URUT.map(function(i){
     var x = layak[i];
     var pos = i + 1;
     if(!x) return '<div class="tiang kosong p' + pos + '"><span class="angka-pos">' + pos + '</span></div>';
-    return '<div class="tiang p' + pos + '">' +
+    return '<div class="tiang p' + pos + ((beku && pos === 1) ? " beku" : "") + '">' +
       (pos === 1 ? '<span class="mahkota" aria-hidden="true">★</span>' : '') +
       avatarPeserta(x, "besar") +
       '<span class="tiang-nama">' + esc(x.nama) + '</span>' +
@@ -12658,8 +12714,15 @@ function kartuBest(){
     '<div class="rekapbar">' +
       '<label for="bulanBest" class="mini">Bulan</label>' +
       '<input type="month" id="bulanBest" value="' + esc(bulan) + '">' +
-      '<label class="kotak push"><input type="checkbox" id="ulangBest"' + (ulang ? " checked" : "") + '>' +
-        '<span>Boleh terpilih lagi</span></label>' +
+      (beku
+        ? '<span class="lencana-selesai push">Selesai · ' + esc(String(beku.dibuat || "").slice(0, 10)) + '</span>' +
+          (bolehKelola()
+            ? '<button class="btn small" data-act="bukaBulan" data-kode="' + esc(bulan) + '">Buka kembali</button>'
+            : '')
+        : (bolehKelola() && layak.length
+            ? '<button class="btn small primary push" data-act="selesaiBulan" data-kode="' + esc(bulan) + '">' +
+              IKON.catat + 'Selesaikan bulan ini</button>'
+            : '<span class="mini push">' + (layak.length ? 'Belum diselesaikan' : '') + '</span>')) +
     '</div>' +
     (layak.length
       ? '<div class="podium">' + podium + '</div>'
@@ -12669,11 +12732,12 @@ function kartuBest(){
     (terkunci ? '<ul class="daftar-peringkat">' + terkunci + '</ul>' : '') +
     '<div class="card-pad"><p class="hint m0">' +
       'Peringkat dihitung dari rata-rata penilaian pada bulan itu saja, dan juaranya ' +
-      'ditentukan otomatis. ' +
-      (ulang
-        ? 'Pengulangan dinyalakan: yang pernah juara tetap dapat naik podium lagi.'
-        : 'Yang pernah menjadi Best Staff tidak ikut podium bulan berikutnya, dan ditampilkan ' +
-          'terpisah di bawah beserta bulan kemenangannya.') +
+      'ditentukan otomatis. Yang pernah menjadi Best Staff tidak ikut podium bulan ' +
+      'berikutnya, dan ditampilkan terpisah di bawah beserta bulan kemenangannya. ' +
+      (beku
+        ? 'Bulan ini sudah diselesaikan, jadi hasilnya tidak berubah lagi meskipun ada penilaian baru.'
+        : 'Selama belum diselesaikan, hasilnya masih dapat berubah bila ada penilaian baru' +
+          (bolehKelola() ? '.' : ' — penyelesaian dilakukan oleh akun pengelola.')) +
     '</p></div>' +
   '</div>';
 }
@@ -13124,6 +13188,25 @@ document.addEventListener("click", function(ev){
     }
     $("#fileFoto").click();
   }
+  else if(act === "selesaiBulan"){
+    var bln = t.dataset.kode;
+    var jr = hitungPemenang().perBulan[bln];
+    if(!jr){ toast("warn", "Belum ada juara", "Belum ada staff yang dapat dinaikkan podium."); return; }
+    if(confirm("Selesaikan evaluasi " + namaBulan(bln) + "?" + String.fromCharCode(10,10) +
+               jr.nama + " ditetapkan sebagai Best Staff, dan hasilnya tidak berubah lagi " +
+               "meskipun ada penilaian baru.")){
+      selesaikanBulan(bln, jr);
+      toast("ok", "Evaluasi " + namaBulan(bln) + " selesai", jr.nama);
+    }
+  }
+  else if(act === "bukaBulan"){
+    var b2 = t.dataset.kode;
+    if(confirm("Buka kembali " + namaBulan(b2) + "?" + String.fromCharCode(10,10) +
+               "Juaranya akan dihitung ulang dari penilaian yang ada sekarang.")){
+      bukaKembaliBulan(b2);
+      toast("ok", namaBulan(b2) + " dibuka kembali", "");
+    }
+  }
   else if(act === "bukaEval"){ state.bukaEval = t.dataset.kode; gambarUlang(); window.scrollTo(0,0); }
   else if(act === "tutupEval"){ state.bukaEval = null; gambarUlang(); window.scrollTo(0,0); }
   else if(act === "hapusEval"){
@@ -13215,23 +13298,6 @@ document.addEventListener("keydown", function(ev){
 document.addEventListener("change", function(ev){
   var id = ev.target.id;
   if(id === "bulanBest"){ state.bulanBest = ev.target.value || bulanIni(); gambarUlang(); return; }
-  if(id === "ulangBest"){
-    state.pengaturan.ulangBest = ev.target.checked;
-    simpanPengaturan();
-    gambarUlang();
-    return;
-  }
-  if(id === "bulanBest"){
-    state.bulanBest = ev.target.value || bulanIni();
-    gambarUlang();
-    return;
-  }
-  if(id === "ulangBest"){
-    state.pengaturan.ulangBest = ev.target.checked;
-    simpanPengaturan();
-    gambarUlang();
-    return;
-  }
   if(id === "fileFoto"){
     var berkas = ev.target.files && ev.target.files[0];
     ev.target.value = "";

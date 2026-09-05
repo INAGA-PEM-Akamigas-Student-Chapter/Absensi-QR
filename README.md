@@ -242,21 +242,29 @@ riwayatnya terbaca seperti rapor: nilai per tanggal, beserta rata-ratanya.
 ### Best Staff bulanan
 
 Di atas daftar staff ada **podium bulanan**. Pilih bulannya, dan tiga teratas tersusun
-sendiri dari **rata-rata penilaian pada bulan itu saja** — tidak ada tombol pilih, tidak
-ada penetapan manual. Staff yang belum dinilai pada bulan tersebut tidak ikut. Urutan
-seri dipecah oleh jumlah penilaian, lalu nama, sehingga hasilnya sama di semua perangkat.
+sendiri dari **rata-rata penilaian pada bulan itu saja** — tidak ada penetapan manual.
+Staff yang belum dinilai pada bulan tersebut tidak ikut. Urutan seri dipecah oleh jumlah
+penilaian, lalu nama, sehingga hasilnya sama di semua perangkat.
 
 **Yang pernah juara tidak naik podium lagi.** Pemenang dihitung maju dari bulan terlama:
 tiap bulan diambil nilai tertinggi di antara yang belum pernah menang. Mereka tetap
 ditampilkan di bawah podium, redup, beserta bulan kemenangannya — bukan disembunyikan,
 karena orang bernilai tertinggi yang tiba-tiba hilang justru membingungkan.
 
-Bila ingin membolehkan pengulangan, nyalakan **Boleh terpilih lagi** pada kartu yang
-sama. Opsi itu tersimpan di server, jadi berlaku sama untuk semua penilai.
+**Menyelesaikan evaluasi bulanan.** Selama sebuah bulan belum diselesaikan, juaranya
+masih ikut berubah bila ada penilaian baru. Akun **pengelola** dapat menekan
+**Selesaikan bulan ini** untuk membekukan hasilnya: juara bulan itu terkunci dan tidak
+berubah lagi meskipun nilai staff lain kemudian melampauinya. Bulan yang sudah beku
+ditandai lencana **Selesai** beserta tanggalnya, dan alas podiumnya berubah hijau.
 
-Pemenang tidak disimpan di mana pun — selalu dihitung ulang dari penilaian yang ada.
-Konsekuensinya, menambah atau menghapus penilaian di bulan lampau dapat mengubah
-juaranya, dan giliran bulan-bulan sesudahnya ikut menyesuaikan.
+Pengelola juga dapat menekan **Buka kembali** bila ada kekeliruan; juaranya lalu dihitung
+ulang dari penilaian yang ada saat itu. Akun penilai biasa hanya melihat lencananya,
+tanpa tombol.
+
+Hasil yang dibekukan disimpan sebagai dokumen bertanda `jenis: "selesai"` di dalam
+koleksi `evaluasi`, sehingga aturan keamanan yang sudah ada langsung berlaku tanpa perlu
+diubah. Pembatasan ke akun pengelola berlaku di tampilan; bila ingin ditegakkan di
+server, tambahkan syarat `kelola()` untuk dokumen berawalan `selesai__` pada Rules.
 
 **Penilaian bersifat anonim.** Identitas penilai tidak disimpan sama sekali, bukan
 sekadar disembunyikan dari tampilan — dokumen `evaluasi` hanya memuat kode peserta,
@@ -267,7 +275,8 @@ siapa yang memberi nilai tertentu, termasuk oleh pemilik proyek.
 
 ```
 peserta/<kode>          { kode, nama, grup, staff, foto }   foto: data URI JPEG 160px, opsional
-evaluasi/<id>           { kode, tanggal, nilai, proker, catatan, dibuat }   tanpa identitas penilai
+evaluasi/<id>              { kode, tanggal, nilai, proker, catatan, dibuat }  tanpa identitas penilai
+evaluasi/selesai__<YYYY-MM> { jenis: "selesai", bulan, kode, nama, nilai }     hasil bulan yang dibekukan
 pengguna/<email>        { kelola, penilai }                          hanya dari Firebase Console
 absensi/<YYYY-MM-DD>    { tanggal, catatan: { <kode>: { nama, grup, masuk, pulang, status } } }
 pengaturan/umum         { jamMasuk, toleransi }
