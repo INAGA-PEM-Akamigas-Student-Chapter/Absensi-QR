@@ -10581,6 +10581,8 @@ td.nm{white-space:nowrap}
 .nilai-rata{font-family:"IBM Plex Mono",monospace; font-size:17px; font-weight:600;
   font-variant-numeric:tabular-nums}
 .nilai-rata.ok{color:var(--ok)} .nilai-rata.warn{color:var(--warn)} .nilai-rata.bad{color:var(--bad)}
+.tanda-pernah{display:inline-block; padding:1px 8px; border-radius:999px; font-size:10.5px;
+  font-weight:600; background:var(--sunk); color:var(--muted); white-space:nowrap}
 .tanda-juara{display:inline-block; padding:1px 8px; border-radius:999px; font-size:10.5px;
   font-weight:600; letter-spacing:.03em; background:var(--accent); color:#fff}
 :root[data-theme="dark"] .tanda-juara{color:#08201d}
@@ -11011,12 +11013,24 @@ function peringkatBulan(bulan){
       return bandingAlami(a.nama, b.nama);
     });
 }
-/* Best Staff tidak lagi ditentukan aplikasi. Peringkat hanya menyajikan datanya;
+/* Siapa saja yang pernah menjadi Best Loyalty, beserta bulan saat ditetapkan.
+   Dipakai untuk menandai mereka di daftar staff dan menahan mereka dari podium
+   bulan-bulan berikutnya. Bulan terawal yang disimpan: satu orang satu kali. */
+function riwayatLoyalty(){
+  var per = {};
+  Object.keys(state.selesai).sort().forEach(function(b){
+    var r = state.selesai[b];
+    if(r && r.kode && !per[r.kode])
+      per[r.kode] = {bulan: r.bulan || b, nilai: r.nilai, dibuat: r.dibuat || ""};
+  });
+  return per;
+}
+/* Best Loyalty tidak lagi ditentukan aplikasi. Peringkat hanya menyajikan datanya;
    siapa yang terpilih adalah keputusan orang, dan disimpan apa adanya. */
 async function pilihBestStaff(bulan, kode){
   if(!kode){
     await bukaKembaliBulan(bulan);
-    toast("ok", "Best Staff " + namaBulan(bulan) + " dikosongkan", "");
+    toast("ok", "Best Loyalty " + namaBulan(bulan) + " dikosongkan", "");
     return;
   }
   var daftar = peringkatBulan(bulan), pilih = null;
@@ -11028,7 +11042,7 @@ async function pilihBestStaff(bulan, kode){
     pilih = {kode: p.kode, nama: p.nama, rata: null};
   }
   await selesaikanBulan(bulan, pilih);
-  toast("ok", "Best Staff " + namaBulan(bulan), pilih.nama);
+  toast("ok", "Best Loyalty " + namaBulan(bulan), pilih.nama);
 }
 async function selesaikanBulan(bulan, juara){
   var rec = {id: "selesai__" + bulan, jenis: "selesai", bulan: bulan,
@@ -12765,13 +12779,20 @@ function viewEvaluasi(){
 
   if(fokus) return viewEvaluasiDetail(fokus);
 
+  var pernah = riwayatLoyalty();
   var rows = staff.map(function(p){
     var d = evaluasiPeserta(p.kode), rata = rataEvaluasi(p.kode);
     var akhir = d[0];
+    var gelar = pernah[p.kode];
     return '<tr><td class="num">' + esc(p.kode) + '</td>' +
       '<td class="nm"><span class="baris-orang">' + avatarPeserta(p) +
         '<span class="nama-teks">' + esc(p.nama) +
-          '<span class="sub-grup">' + esc(p.grup || "—") + '</span></span></span></td>' +
+          (gelar ? ' <span class="tanda-juara" title="Ditetapkan ' +
+                   esc(String(gelar.dibuat || "").slice(0, 10) || namaBulan(gelar.bulan)) +
+                   (gelar.nilai != null ? ", nilai " + gelar.nilai : "") + '">Best Loyalty</span>' : '') +
+          '<span class="sub-grup">' + esc(p.grup || "—") +
+            (gelar ? ' · Best Loyalty ' + esc(namaBulan(gelar.bulan)) : '') +
+          '</span></span></span></td>' +
       '<td class="mini kol-grup">' + esc(p.grup || "—") + '</td>' +
       '<td class="num">' + d.length + '</td>' +
       '<td class="num">' + (akhir ? esc(akhir.tanggal) : "—") + '</td>' +
@@ -12817,7 +12838,12 @@ function kartuBulanan(){
 
   /* Puncak podium diisi pilihan orang, bukan nilai tertinggi. Selama belum ada
      yang dipilih, podium hanya menyusun peringkat dan tidak menobatkan siapa pun. */
-  var urutan = daftar.slice();
+  /* Yang pernah menjadi Best Loyalty tidak naik podium lagi, tetapi tetap
+     tampil di daftar peringkat di bawahnya beserta nilainya. */
+  var pernah = riwayatLoyalty();
+  var urutan = daftar.filter(function(x){
+    return !pernah[x.kode] || (pilihan && pilihan.kode === x.kode);
+  });
   if(pilihan && pilihan.kode){
     var pos = -1;
     for(var i = 0; i < urutan.length; i++){ if(urutan[i].kode === pilihan.kode){ pos = i; break; } }
@@ -12844,27 +12870,38 @@ function kartuBulanan(){
       avatarPeserta(x, "besar") +
       '<span class="tiang-nama">' + esc(x.nama) + '</span>' +
       '<span class="tiang-grup">' + esc(x.grup || "\u2014") + '</span>' +
-      (juara ? '<span class="tanda-juara">Best Staff</span>' : '') +
+      (juara ? '<span class="tanda-juara">Best Loyalty</span>' : '') +
       angka(x) +
       (x.potong ? '<span class="tiang-potong">' + rincianPotong(x) + '</span>' : '') +
       '<span class="alas"><span class="angka-pos">' + pos + '</span></span>' +
     '</div>';
   }).join("");
 
-  var sisa = urutan.slice(3).map(function(x, i){
-    return '<li class="peringkat">' +
-      '<span class="posisi">' + (i + 4) + '</span>' + avatarPeserta(x) +
-      '<span class="nama-teks">' + esc(x.nama) +
-        '<span class="sub-grup">' + esc(x.grup || "\u2014") + ' \u00b7 ' + x.jumlah + ' penilaian' +
-          (x.potong ? ' ' + TITIK + ' ' + rincianPotong(x) : '') + '</span></span>' +
-      '<span class="nilai-rata ' + warnaNilai(x.rata) + '">' + x.rata + '</span></li>';
-  }).join("");
+  var diPodium = {};
+  urutan.slice(0, 3).forEach(function(x){ diPodium[x.kode] = true; });
+  /* Nomornya mengikuti peringkat pada data bulan ini, bukan urutan podium,
+     supaya peraih gelar lama tetap terbaca posisi sebenarnya. */
+  var sisa = daftar.map(function(x, i){ return {x: x, no: i + 1}; })
+    .filter(function(o){ return !diPodium[o.x.kode]; })
+    .map(function(o){
+      var x = o.x, gelar = pernah[x.kode];
+      return '<li class="peringkat' + (gelar ? " redup" : "") + '">' +
+        '<span class="posisi">' + o.no + '</span>' + avatarPeserta(x) +
+        '<span class="nama-teks">' + esc(x.nama) +
+          (gelar ? ' <span class="tanda-pernah">Best Loyalty ' +
+                   esc(namaBulan(gelar.bulan)) + '</span>' : '') +
+          '<span class="sub-grup">' + esc(x.grup || "\u2014") + ' \u00b7 ' + x.jumlah + ' penilaian' +
+            (x.potong ? ' ' + TITIK + ' ' + rincianPotong(x) : '') + '</span></span>' +
+        '<span class="nilai-rata ' + warnaNilai(x.rata) + '">' + x.rata + '</span></li>';
+    }).join("");
 
   // Rata-rata bulan ini ditempelkan ke nama supaya pemilihan tidak perlu menebak.
   var nilaiBulan = {};
   daftar.forEach(function(x){ nilaiBulan[x.kode] = x.rata; });
   var adaDiDaftar = false;
-  var opsi = daftarStaff().map(function(p){
+  var opsi = daftarStaff().filter(function(p){
+    return !pernah[p.kode] || (pilihan && pilihan.kode === p.kode);
+  }).map(function(p){
     if(pilihan && pilihan.kode === p.kode) adaDiDaftar = true;
     var r = nilaiBulan[p.kode];
     return '<option value="' + esc(p.kode) + '"' +
@@ -12885,10 +12922,10 @@ function kartuBulanan(){
       '<label for="bulanBest" class="mini">Bulan</label>' +
       '<input type="month" id="bulanBest" value="' + esc(bulan) + '">' +
       (boleh
-        ? '<label for="pilihBest" class="mini push">Best Staff</label>' +
+        ? '<label for="pilihBest" class="mini push">Best Loyalty</label>' +
           '<select id="pilihBest">' + opsi + '</select>'
         : '<span class="' + (pilihan ? "lencana-selesai" : "mini") + ' push">' +
-          (pilihan ? 'Best Staff \u00b7 ' + esc(pilihan.nama) : 'Best Staff belum dipilih') + '</span>') +
+          (pilihan ? 'Best Loyalty \u00b7 ' + esc(pilihan.nama) : 'Best Loyalty belum dipilih') + '</span>') +
     '</div>' +
     (urutan.length
       ? '<div class="podium">' + podium + '</div>'
