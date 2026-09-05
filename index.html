@@ -10951,6 +10951,8 @@ function tulisSelesaiLokal(){
    keterlambatan dan paling banyak sepuluh poin, supaya kehadiran berpengaruh
    tanpa menenggelamkan penilaian kerja. Nilainya tidak pernah jatuh di bawah nol. */
 var POTONG_TELAT = 1, POTONG_MAKS = 10;
+var POTONG_ABSEN = 2, POTONG_ABSEN_MAKS = 10;
+var MIN = String.fromCharCode(8722), TITIK = String.fromCharCode(183);
 function telatBulan(kode, bulan){
   var src = state.demo ? state.contohHari : state.hari, n = 0;
   Object.keys(src).forEach(function(iso){
@@ -10959,6 +10961,27 @@ function telatBulan(kode, bulan){
     if(r && r.masuk && r.status === "terlambat") n++;
   });
   return n;
+}
+/* Absen hanya dihitung pada hari yang benar-benar ada kegiatannya, sama seperti
+   dasbor: hari libur tidak boleh menurunkan nilai siapa pun. Izin dilewati,
+   karena ketidakhadirannya sudah diberitahukan sebelumnya. */
+function absenBulan(kode, bulan){
+  var src = state.demo ? state.contohHari : state.hari, n = 0;
+  Object.keys(src).forEach(function(iso){
+    if(String(iso).slice(0, 7) !== bulan) return;
+    var cat = (src[iso] || {}).catatan || {};
+    if(!Object.keys(cat).length) return;
+    var r = cat[kode];
+    if(r && r.status === "izin") return;
+    if(!r || !r.masuk) n++;
+  });
+  return n;
+}
+function rincianPotong(x){
+  var b = [];
+  if(x.potongTelat) b.push(MIN + x.potongTelat + " telat");
+  if(x.potongAbsen) b.push(MIN + x.potongAbsen + " absen");
+  return b.join(" " + TITIK + " ");
 }
 function peringkatBulan(bulan){
   var staff = daftarStaff();
@@ -10970,11 +10993,15 @@ function peringkatBulan(bulan){
     d.forEach(function(e){ jml += (+e.nilai || 0); });
     var murni = d.length ? Math.round(jml / d.length * 10) / 10 : null;
     var telat = telatBulan(p.kode, bulan);
-    var potong = Math.min(telat * POTONG_TELAT, POTONG_MAKS);
+    var absen = absenBulan(p.kode, bulan);
+    var potongTelat = Math.min(telat * POTONG_TELAT, POTONG_MAKS);
+    var potongAbsen = Math.min(absen * POTONG_ABSEN, POTONG_ABSEN_MAKS);
+    var potong = potongTelat + potongAbsen;
     return {
       kode: p.kode, nama: p.nama, grup: p.grup, foto: p.foto,
       jumlah: d.length,
-      murni: murni, telat: telat, potong: potong,
+      murni: murni, telat: telat, absen: absen,
+      potongTelat: potongTelat, potongAbsen: potongAbsen, potong: potong,
       rata: murni == null ? null : Math.max(0, Math.round((murni - potong) * 10) / 10)
     };
   }).filter(function(x){ return x.jumlah > 0; })
@@ -12779,7 +12806,7 @@ function kartuBulanan(){
       '<span class="tiang-grup">' + esc(x.grup || "\u2014") + '</span>' +
       (juara ? '<span class="tanda-juara">Best Staff</span>' : '') +
       angka(x) +
-      (x.potong ? '<span class="tiang-potong">\u2212' + x.potong + ' telat</span>' : '') +
+      (x.potong ? '<span class="tiang-potong">' + rincianPotong(x) + '</span>' : '') +
       '<span class="alas"><span class="angka-pos">' + pos + '</span></span>' +
     '</div>';
   }).join("");
@@ -12789,7 +12816,7 @@ function kartuBulanan(){
       '<span class="posisi">' + (i + 4) + '</span>' + avatarPeserta(x) +
       '<span class="nama-teks">' + esc(x.nama) +
         '<span class="sub-grup">' + esc(x.grup || "\u2014") + ' \u00b7 ' + x.jumlah + ' penilaian' +
-          (x.potong ? ' \u00b7 \u2212' + x.potong + ' telat' : '') + '</span></span>' +
+          (x.potong ? ' ' + TITIK + ' ' + rincianPotong(x) : '') + '</span></span>' +
       '<span class="nilai-rata ' + warnaNilai(x.rata) + '">' + x.rata + '</span></li>';
   }).join("");
 
@@ -12830,7 +12857,9 @@ function kartuBulanan(){
     (sisa ? '<ul class="daftar-peringkat">' + sisa + '</ul>' : '') +
     (urutan.length
       ? '<p class="hint">Nilai bulanan adalah rata-rata penilaian dikurangi ' + POTONG_TELAT +
-        ' poin untuk setiap keterlambatan, paling banyak ' + POTONG_MAKS + ' poin.</p>'
+        ' poin untuk setiap keterlambatan (paling banyak ' + POTONG_MAKS + ' poin) dan ' +
+        POTONG_ABSEN + ' poin untuk setiap absen (paling banyak ' + POTONG_ABSEN_MAKS +
+        ' poin). Izin tidak mengurangi nilai.</p>'
       : '') +
   '</div>';
 }
@@ -12915,6 +12944,7 @@ function viewDasbor(){
       '<td class="num">' + s.hadir + '</td>' +
       '<td class="num">' + s.telat + '</td>' +
       '<td class="num">' + s.izin + '</td>' +
+      '<td class="num">' + s.absen + '</td>' +
       '<td class="persen"><span class="angka">' + s.persen + '%</span>' +
         '<span class="bar"><i class="' + warna + '" style="width:' + s.persen + '%"></i></span></td></tr>';
   }).join("");
@@ -12943,7 +12973,8 @@ function viewDasbor(){
       (r.pertemuan
         ? '<div class="tablewrap"><table><thead><tr>' +
             th("Kode","kode") + th("Nama","nama") + th("Kelas / divisi","grup","kol-grup") +
-            th("Hadir","hadir") + th("Telat","telat") + th("Izin","izin") + th("Kehadiran","persen") +
+            th("Hadir","hadir") + th("Telat","telat") + th("Izin","izin") +
+            th("Absen","absen") + th("Kehadiran","persen") +
           '</tr></thead><tbody>' + rows + '</tbody></table></div>'
         : '<div class="empty">' + IKON.kosong + '<b>Belum ada pertemuan tercatat</b>' +
           '<span>Persentase muncul setelah ada pemindaian. Hari tanpa pemindaian tidak dihitung sebagai pertemuan.</span></div>') +
